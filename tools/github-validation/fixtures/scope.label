@@ -1,0 +1,5 @@
+case=unapproved-label
+repository=acme/widgets
+labels=self-hosted,privileged
+fork=false
+expected=DENY

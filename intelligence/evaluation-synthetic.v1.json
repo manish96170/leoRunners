@@ -1,0 +1,15 @@
+{
+  "version": "intelligence-evaluation.v1",
+  "dataset_id": "synthetic-regression-2026-09",
+  "provenance": "synthetic",
+  "ai_enabled": false,
+  "policy_version": "deterministic.v1",
+  "telemetry": [
+    {"id":"job-a","provider":"aws","outcome":"success","timings_ms":{"queue":120,"boot":800},"resources":{"cpu":2,"memory_gb":4,"gpu":0}},
+    {"id":"job-b","provider":"gcp","outcome":"failure","timings_ms":{"queue":180,"boot":950},"resources":{"cpu":2,"memory_gb":4,"gpu":0}}
+  ],
+  "cases": [
+    {"id":"failure-a","log":"assertion failed in test suite","max_log_bytes":64,"expected_action":"annotate","expected_classification":"test-failure","expected_accepted":true,"response":{"classification":"test-failure","explanation":{"summary":"test assertion failure","evidence":["exit code 1"]},"recommendations":[{"action":"annotate","rationale":"record advisory"}]}},
+    {"id":"timeout-a","log":"runner timeout after bounded wait","max_log_bytes":64,"expected_action":"retry","expected_classification":"timeout","expected_accepted":true,"response":{"classification":"timeout","recommendations":[{"action":"retry","rationale":"transient timeout"}]}}
+  ]
+}

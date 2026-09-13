@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -192,6 +193,46 @@ func TestDiagnosticsAndStringRedactSecrets(t *testing.T) {
 	diagnostics := c.Diagnostics()
 	if diagnostics["webhook_secret_set"] != "true" || diagnostics["jit_token_set"] != "true" || diagnostics["ai_api_key_set"] != "true" {
 		t.Fatalf("secret presence diagnostics missing: %#v", diagnostics)
+	}
+}
+
+func TestSecretContractAndSafeSnapshotNeverContainValues(t *testing.T) {
+	env := validEnv()
+	env["GITHUB_JIT_ENABLED"] = "true"
+	env["GITHUB_APP_INSTALLATION_TOKEN"] = "jit-secret"
+	env["GITHUB_RUNNER_GROUP_ID"] = "7"
+	c, err := LoadFrom(env)
+	if err != nil {
+		t.Fatalf("LoadFrom() error = %v", err)
+	}
+	requirements := c.SecretContract()
+	if len(requirements) != 3 || !requirements[0].Required || !requirements[1].Required || requirements[2].Required {
+		t.Fatalf("secret contract = %+v", requirements)
+	}
+	snapshot := c.SafeSnapshot()
+	if !snapshot.SecretPresence["GITHUB_WEBHOOK_SECRET"] || !snapshot.SecretPresence["GITHUB_APP_INSTALLATION_TOKEN"] {
+		t.Fatalf("secret presence = %#v", snapshot.SecretPresence)
+	}
+	if strings.Contains(strings.ToLower(fmt.Sprintf("%+v", snapshot)), "secret") && strings.Contains(fmt.Sprintf("%+v", snapshot), "jit-secret") {
+		t.Fatalf("safe snapshot leaked secret: %+v", snapshot)
+	}
+}
+
+func TestValidateRejectsHostedAIWithoutCredentialAndStaleDisabledCredential(t *testing.T) {
+	hosted := validEnv()
+	hosted["AI_ENABLED"] = "true"
+	hosted["AI_PROVIDER"] = "hosted"
+	hosted["AI_ENDPOINT"] = "https://ai.example/analyze"
+	hosted["AI_MODEL"] = "model"
+	hosted["AI_REGION"] = "us-east-1"
+	hosted["AI_CONSENT_APPROVED"] = "true"
+	if _, err := LoadFrom(hosted); !errors.Is(err, ErrInvalid) {
+		t.Fatal("hosted AI without API key unexpectedly validated")
+	}
+	disabled := validEnv()
+	disabled["AI_API_KEY"] = "stale-key"
+	if _, err := LoadFrom(disabled); !errors.Is(err, ErrInvalid) {
+		t.Fatal("disabled AI with stale API key unexpectedly validated")
 	}
 }
 

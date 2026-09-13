@@ -69,6 +69,14 @@ endpoints have no hourly endpoint charge, but they only cover supported AWS
 services. The `cost_warnings` output makes selected paid options visible in
 plans and downstream tooling.
 
+Set `egress_mode` to `nat`, `vpc-endpoint`, `hybrid`, or `approved-proxy` to
+label the topology used by reachability evidence. This is metadata only; it
+does not enable NAT or endpoints. The `reachability_labels` output includes the
+declared mode, DNS/isolation expectations, and cost categories to reconcile
+against provider billing. Use `network/reachability-matrix.v1.json` and
+`tools/network-validation/measure.sh` for the corresponding offline contract
+and guarded read-only probes.
+
 ## Security and ownership
 
 - Use private runner subnets without public IP assignment.

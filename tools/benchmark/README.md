@@ -1,4 +1,4 @@
-# Phase 5 startup benchmark
+# Lifecycle benchmark collector
 
 This harness measures the ephemeral runner path as seven ordered phases:
 
@@ -38,3 +38,21 @@ registration, ready, job-start, and cleanup callbacks, then pass the result to
 `WriteCSV` or `WriteJSON`. Set `AWS_PROFILE`, `AWS_REGION`, and a disposable
 runner configuration in the controller separately; this harness never embeds
 credentials or silently provisions infrastructure.
+
+## Phase 38 evidence handoff
+
+This package records lifecycle samples; it does not silently turn them into
+performance claims. To publish a baseline/candidate evidence pair, bind each
+sample to `workloads/workload-manifest.v1.yaml` and carry its SHA-256 digest,
+repository commit, workflow, and command digest into the `benchmarks/schema.json`
+`workload` object. Mark fake replays as `provenance.execution_class: synthetic`
+and controlled checkout runs as `real`. Then run:
+
+```sh
+./workloads/validate.sh
+./benchmarks/validate.sh baseline.json candidate.json
+```
+
+The evidence validator rejects mixed synthetic/real pairs, manifest or
+toolchain mismatches, unredacted payloads, incomparable pricing bases, and
+duration or cost regressions above the declared thresholds.

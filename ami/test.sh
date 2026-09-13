@@ -16,6 +16,10 @@ grep -Fq 'vpc_id' runner.pkr.hcl
 grep -Fq 'subnet_id' runner.pkr.hcl
 grep -Fq 'iam_instance_profile' runner.pkr.hcl
 grep -Fq 'script            = "${path.root}/scripts/install-base-tools.sh"' runner.pkr.hcl
+grep -Fq 'http_put_response_hop_limit = 1' runner.pkr.hcl
+grep -Fq 'encrypted             = true' runner.pkr.hcl
+grep -Fq 'leo-runners:arch' runner.pkr.hcl
+grep -Fq 'profile_version' manifest.example.v1.json
 
 if rg -n -i 'aws_access_key|aws_secret|github_pat|github_token|encoded_jit_config|BEGIN (RSA|OPENSSH|EC)' \
   --glob '!test.sh' --glob '!validate.sh' --glob '!README.md' .; then

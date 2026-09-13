@@ -1,0 +1,5 @@
+case=fork-isolation
+repository=acme/widgets
+labels=self-hosted,linux
+fork=true
+expected=DENY

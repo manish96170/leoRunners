@@ -1,0 +1,33 @@
+{
+  "apiVersion": "network.leorunners.io/v1",
+  "kind": "ReachabilityMatrix",
+  "metadata": {"name": "ephemeral-runner-default", "version": "1.0.0"},
+  "spec": {
+    "subnetClass": "private",
+    "dns": {"mode": "cloud-resolver", "required": true, "resolverTargets": ["169.254.169.253"]},
+    "egress": {
+      "mode": "nat",
+      "allowedModes": ["nat", "vpc-endpoint", "hybrid", "approved-proxy"],
+      "tlsRequired": true,
+      "maxDnsMs": 1500,
+      "maxConnectMs": 5000,
+      "maxRequestMs": 15000
+    },
+    "destinations": [
+      {"id": "github-api", "hostname": "api.github.com", "port": 443, "protocol": "https", "required": true, "path": "/meta", "allowedEgressModes": ["nat", "approved-proxy"]},
+      {"id": "github-actions", "hostname": "github.com", "port": 443, "protocol": "https", "required": true, "path": "/", "allowedEgressModes": ["nat", "approved-proxy"]},
+      {"id": "package-registry", "hostname": "registry.npmjs.org", "port": 443, "protocol": "https", "required": false, "path": "/", "allowedEgressModes": ["nat", "approved-proxy"]}
+    ],
+    "isolation": {"inbound": "deny", "publicIp": false, "metadataImdsv2": true, "untrustedForks": "separate-trust-boundary"},
+    "cost": {
+      "currency": "USD",
+      "labels": {
+        "nat": ["nat-hourly", "nat-processing-per-gb", "cross-zone-transfer-possible"],
+        "vpc-endpoint": ["interface-endpoint-hourly", "interface-endpoint-processing-per-gb"],
+        "hybrid": ["nat-hourly", "nat-processing-per-gb", "interface-endpoint-hourly", "interface-endpoint-processing-per-gb"],
+        "approved-proxy": ["proxy-service-cost", "proxy-processing-cost"]
+      },
+      "billingReconciliationRequired": true
+    }
+  }
+}

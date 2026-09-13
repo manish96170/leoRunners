@@ -64,3 +64,21 @@ event-specific status rules, identity consistency, deduplication/replay keys,
 retention, bounded extensions, and forbidden secret-shaped content. It also
 rejects duplicate event IDs or deduplication keys across the supplied fixtures.
 
+## Sink operations v1
+
+`sink-contract.v1.json` defines the offline operational contract for the
+append-only event sink and archive. The safe fixture requires local JSONL
+delivery, persist-before-ack deduplication, bounded retries and queue drops,
+owner-only `0600` archive permissions, metadata-only redaction, and bounded
+read-only replay. `sink-behavior.v1.json` records deterministic evidence for
+duplicate suppression, event-ID-preserving replay, and measurable overflow that
+does not block cleanup.
+
+Validate these declarations without contacting an external sink:
+
+```sh
+./tools/event-sink-validation/test.sh
+```
+
+The validator rejects external transport declarations, raw payload handling,
+permissive archive modes, replay side effects, and inconsistent drop evidence.

@@ -66,6 +66,7 @@ type Repository struct {
 	FullName string `json:"full_name"`
 	Owner    any    `json:"owner"`
 	Name     string `json:"name"`
+	IsFork   bool   `json:"fork"`
 }
 
 type Owner struct {

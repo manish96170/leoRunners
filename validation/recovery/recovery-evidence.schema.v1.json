@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leorunners.dev/schemas/recovery-evidence.v1.json",
+  "title": "Leo Runners Recovery Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "recovery.leorunners.io/v1" },
+    "kind": { "const": "RecoveryEvidence" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "run_id", "started_at", "finished_at"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{2,63}$" },
+        "run_id": { "type": "string", "pattern": "^recovery-[a-z0-9-]{3,64}$" },
+        "started_at": { "type": "string", "format": "date-time" },
+        "finished_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recovery_window_seconds", "state_recovery", "event_replay", "lease_fencing", "stale_runner_reaping", "takeover", "evidence"],
+      "properties": {
+        "recovery_window_seconds": { "type": "integer", "minimum": 1, "maximum": 300 },
+        "state_recovery": { "type": "object" },
+        "event_replay": { "type": "object" },
+        "lease_fencing": { "type": "object" },
+        "stale_runner_reaping": { "type": "object" },
+        "takeover": { "type": "object" },
+        "evidence": { "type": "object" }
+      }
+    }
+  }
+}

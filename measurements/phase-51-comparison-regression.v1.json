@@ -1,0 +1,15 @@
+{
+  "schema_version": "phase-51.v1",
+  "comparison_id": "phase-51-regression-001",
+  "expected_providers": ["aws", "gcp"],
+  "reference_provider": "aws",
+  "metrics": ["startup_ms", "lifecycle_ms", "cache_hit_rate_percent", "network_ms", "cost_usd"],
+  "regression_thresholds_percent": {"startup_ms": 5, "lifecycle_ms": 5, "cache_hit_rate_percent": 5, "network_ms": 5, "cost_usd": 5},
+  "claim_policy": "bounded-evidence-only",
+  "real_world_claim": false,
+  "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"},
+  "samples": [
+    {"provider": "aws", "sample_id": "aws-01", "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"}, "values": {"startup_ms": 100, "lifecycle_ms": 500, "cache_hit_rate_percent": 80, "network_ms": 40, "cost_usd": 0.02}},
+    {"provider": "gcp", "sample_id": "gcp-01", "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"}, "values": {"startup_ms": 200, "lifecycle_ms": 600, "cache_hit_rate_percent": 60, "network_ms": 80, "cost_usd": 0.04}}
+  ]
+}

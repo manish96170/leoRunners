@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.leorunners.io/final-readiness-report.v1.json",
+  "title": "Leo Runners final production-readiness report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "final-readiness.leorunners.io/v1"},
+    "kind": {"const": "FinalReadinessReport"},
+    "metadata": {"type": "object", "additionalProperties": false, "required": ["name", "version"], "properties": {"name": {"type": "string"}, "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}}},
+    "spec": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "read_only", "live_mutation_invoked", "redaction", "checks", "environment_gated_real_checks", "summary"],
+      "properties": {
+        "status": {"enum": ["PASS", "WARN", "BLOCKED"]},
+        "read_only": {"const": true},
+        "live_mutation_invoked": {"const": false},
+        "redaction": {"type": "object", "additionalProperties": false, "required": ["status", "raw_output_included"], "properties": {"status": {"const": "redacted"}, "raw_output_included": {"const": false}}},
+        "checks": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/check"}},
+        "environment_gated_real_checks": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": "object", "additionalProperties": false, "required": ["name", "requirement", "tool", "status"], "properties": {"name": {"type": "string"}, "requirement": {"type": "string"}, "tool": {"enum": ["aws", "gcp", "github", "docker", "kubectl", "packer", "terraform"]}, "status": {"const": "environment-gated"}}}},
+        "summary": {"type": "object", "additionalProperties": false, "required": ["pass", "warnings", "blocked"], "properties": {"pass": {"type": "integer", "minimum": 0}, "warnings": {"type": "integer", "minimum": 0}, "blocked": {"type": "integer", "minimum": 0}}}
+      }
+    }
+  },
+  "$defs": {"check": {"type": "object", "additionalProperties": false, "required": ["name", "status", "exit_code", "message", "environment_gated"], "properties": {"name": {"type": "string", "pattern": "^[a-z0-9-]+$"}, "status": {"enum": ["PASS", "WARN", "BLOCKED"]}, "exit_code": {"type": "integer", "minimum": 0, "maximum": 255}, "message": {"type": "string", "maxLength": 512}, "environment_gated": {"type": "boolean"}}}}
+}

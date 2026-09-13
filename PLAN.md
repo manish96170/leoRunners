@@ -1,6 +1,6 @@
 # Plan
 
-## Current milestone: Phase 35 final release validation gate
+## Current milestone: Phase 54 final architecture audit
 
 Status: implementation complete; approved live cloud validation remains operator- and environment-gated
 
@@ -147,6 +147,37 @@ The specification requires investigation and architecture documentation before r
   conservation tests.
 - Completed Phase 35 read-only release validation aggregation with redacted,
   atomic reports and live-provisioning detection.
+- Completed Phase 36 read-only cloud preflight identity/reporting improvements.
+- Completed Phase 37 pinned AWS validation inputs, bounded timeouts, cleanup
+  discovery, and fail-closed live-action tests.
+- Completed Phase 38 fixed-workload and benchmark provenance/comparability
+  validation for synthetic and real evidence.
+- Completed Phase 39 guarded AMI image contract and Packer validation.
+- Completed Phase 40 network reachability matrices and guarded NAT/endpoint
+  measurement checks.
+- Completed Phase 41 event sink/archive contracts for redaction, retention,
+  replay, idempotency, permissions, and drops.
+- Completed Phase 42 deterministic telemetry-backed intelligence evaluation
+  with AI policy-boundary enforcement.
+- Completed Phase 43 offline GitHub JIT, runner registration, bootstrap,
+  cancellation, cleanup, and untrusted-workload validation.
+- Completed Phase 44 offline Terraform provider/module/IAM dependency checks
+  with explicit unavailable-provider status.
+- Completed Phase 45 read-only final readiness aggregation and report output.
+- Completed Phase 46 production secret/configuration contracts and Kubernetes
+  secret-reference validation.
+- Completed Phase 47 guarded GCP project/zone/template/label lifecycle checks.
+- Completed Phase 48 GitHub organization/repository, webhook, JIT, runner-group,
+  registration, cleanup, and fork-isolation validation.
+- Completed Phase 49 AMI cold-start checkpoint benchmarks with percentile,
+  timeout, regression, provenance, and digest evidence.
+- Completed Phase 50 cache/network/startup/cost measurement evidence contracts.
+- Completed Phase 51 deterministic AWS/GCP performance and cost comparison with
+  provenance and missing-provider warnings.
+- Completed Phase 52 built-image and rendered-manifest security scanning.
+- Completed Phase 53 disaster-recovery, replay, fencing, reaping, and takeover
+  evidence validation.
+- Completed Phase 54 final architecture and production-readiness audit pack.
 
 ### Next
 

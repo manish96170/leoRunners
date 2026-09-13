@@ -1,0 +1,23 @@
+{
+  "apiVersion": "ami.leorunners.io/v1",
+  "kind": "RunnerImageManifest",
+  "metadata": {"name": "base-linux-x64", "version": "1.0.0"},
+  "artifact": {
+    "image_id": "ami-0123456789abcdef0",
+    "architecture": "x86_64",
+    "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "source_ami": "ami-0123456789abcdef0",
+    "profile_version": "1.0.0"
+  },
+  "provenance": {
+    "builder": "packer",
+    "template": "runner.pkr.hcl",
+    "package_inventory": "rpm-query",
+    "source_resolution": "explicit-pinned-input"
+  },
+  "rollback": {
+    "strategy": "previous-approved-image",
+    "retention_count": 3,
+    "approval_required": true
+  }
+}

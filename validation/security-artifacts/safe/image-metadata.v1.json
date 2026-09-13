@@ -1,0 +1,15 @@
+{
+  "apiVersion": "security.leorunners.io/v1",
+  "kind": "BuiltImageMetadata",
+  "metadata": {"name": "safe-runner", "version": "1.0.0"},
+  "spec": {
+    "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "os": "linux",
+    "architecture": "amd64",
+    "user": "65532",
+    "readOnlyRootFilesystem": true,
+    "secretsBakedIn": false,
+    "ai": {"enabled": false}
+  },
+  "provenance": {"builder": "pinned-build"}
+}

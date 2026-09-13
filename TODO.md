@@ -133,5 +133,24 @@
 - [x] IAM policy refinement and offline simulation checks.
 - [x] Multi-replica capacity fencing, takeover, and conservation tests.
 - [x] Read-only final release-validation gate and redacted report.
+- [x] Read-only preflight identity and evidence reporting.
+- [x] Pinned AWS validation template, bounded cleanup, and mutation guards.
+- [x] Fixed workload/benchmark provenance and comparability checks.
+- [x] Guarded AMI/Packer image contract validation.
+- [x] Network reachability and NAT/endpoint measurement validation.
+- [x] Event sink/archive retention, replay, idempotency, and redaction checks.
+- [x] Telemetry-backed intelligence evaluation with policy boundaries.
+- [x] GitHub JIT/bootstrap/registration and untrusted-workload validation.
+- [x] Terraform provider/module/IAM offline validation.
+- [x] Final production-readiness gate and report.
+- [x] Production configuration/secret contract and Kubernetes reference validation.
+- [x] Guarded GCP lifecycle validation.
+- [x] GitHub production scope, webhook, JIT, and fork isolation validation.
+- [x] AMI cold-start and startup measurement evidence.
+- [x] Cache/network/startup/cost measurement evidence.
+- [x] Multi-cloud performance and cost comparison.
+- [x] Built-image and rendered-manifest security scanning.
+- [x] Disaster-recovery, replay, fencing, and failover evidence.
+- [x] Final architecture and production-readiness audit pack.
 - [ ] Run real read-only AWS/GCP/GitHub preflight.
 - [ ] Run one approved live validation and confirm cleanup.

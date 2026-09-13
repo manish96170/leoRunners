@@ -3,12 +3,18 @@ kind: WorkloadManifest
 metadata:
   name: reference-multi-runtime
   version: 1.0.0
-  description: Optional capability inventory for evidence-driven runner selection.
+  description: Fixed Leo Runners CI workload used for reproducible benchmark evidence.
   source:
-    repository: replace-with-real-repository
-    revision: replace-with-commit-sha
-    inspectedAt: replace-with-utc-timestamp
+    repository: github.com/manish96170/leoRunners
+    revision: 3d8acb1904854728572e7f45459255f7f2113858
+    inspectedAt: "2026-09-13T00:00:00Z"
 spec:
+  workload:
+    id: leo-runners-ci
+    workflow: .github/workflows/ci.yml
+    command: cd controller && go test ./...
+    commandDigest: sha256:3c964eca7067c2d505c40d3076fe152704d65c44bb7dc5d4d8b75bbbfa8b338e
+    provenance: repository-defined
   # Providers map these generic hints to cloud-specific resources.
   runner:
     operatingSystem: linux
@@ -51,7 +57,7 @@ spec:
     - {id: terraform, enabled: false, required: false, mode: observe-only, evidence: {status: absent, sources: []}, measurements: {hitRate: null, restoreDurationMs: null, saveDurationMs: null, invalidationReason: null}}
   validation:
     status: pending
-    repositoryRevision: null
+    repositoryRevision: 3d8acb1904854728572e7f45459255f7f2113858
     observedCommands: []
     gates: {manifestSchema: pending, toolSmokeTest: pending, workloadExecution: pending, cacheMeasurement: pending, artifactAndCleanup: pending}
     telemetry: {queueTimeMs: null, schedulingTimeMs: null, provisioningTimeMs: null, bootTimeMs: null, registrationTimeMs: null, readyTimeMs: null, jobStartTimeMs: null, checkoutTimeMs: null, dependencyInstallTimeMs: null, buildTimeMs: null, testTimeMs: null, cypressTimeMs: null, dockerTimeMs: null, cleanupTimeMs: null, totalLifecycleTimeMs: null}

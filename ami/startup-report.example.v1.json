@@ -1,0 +1,11 @@
+{
+  "apiVersion": "ami.leorunners.io/v1",
+  "kind": "AMIStartupBenchmarkReport",
+  "mode": "fake",
+  "status": "PASS",
+  "samples": [{"sample_id": "fake-0001", "checkpoints_ms": {"launch_requested": 0, "instance_running": 4200, "bootstrap_started": 5200, "bootstrap_completed": 12800, "runner_registered": 15700, "runner_ready": 20500, "job_started": 22600}, "durations_ms": {"total_startup": 22600}}],
+  "summary": {"total_startup": {"p50_ms": 22600, "p95_ms": 22600, "p99_ms": 22600}},
+  "thresholds": {"max_total_startup_ms": 30000, "max_p95_total_startup_ms": 26000, "max_p99_total_startup_ms": 30000, "max_regression_percent": 15},
+  "provenance": {"image_id": "ami-0123456789abcdef0", "image_digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "profile_version": "1.0.0", "source_ami": "ami-0123456789abcdef0", "redacted": true, "secret_free": true},
+  "redaction": {"applied": true, "removed_fields": ["aws_account_id", "instance_id", "private_ip", "public_ip", "user_data", "credentials", "jit_config"]}
+}

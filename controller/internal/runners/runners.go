@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/leo-runners/ci-platform/controller/internal/providers"
@@ -26,10 +27,12 @@ const (
 )
 
 var (
-	ErrInvalidRequest     = errors.New("invalid runner assignment request")
-	ErrNotConfigured      = errors.New("runner assignment service is not configured")
-	ErrInvalidJITConfig   = errors.New("JIT response has no runner identity or configuration")
-	ErrRegistrationFailed = errors.New("GitHub runner registration failed")
+	ErrInvalidRequest       = errors.New("invalid runner assignment request")
+	ErrNotConfigured        = errors.New("runner assignment service is not configured")
+	ErrInvalidJITConfig     = errors.New("JIT response has no runner identity or configuration")
+	ErrRegistrationFailed   = errors.New("GitHub runner registration failed")
+	ErrAssignmentInProgress = errors.New("GitHub runner assignment is already in progress")
+	ErrForkNotAllowed       = errors.New("fork workload is not allowed for ephemeral runner assignment")
 )
 
 // JITRequest contains the public inputs to GitHub's generate-jitconfig API.
@@ -69,6 +72,13 @@ type RegistrationVerifier interface {
 	WaitForRegistration(context.Context, RegistrationRequest) (GitHubRunner, error)
 }
 
+// RegistrationCleanup is optional because GitHub JIT runners normally clean
+// themselves up on exit. Implementations that can observe a runner after a
+// failed assignment should remove it explicitly and remain idempotent.
+type RegistrationCleanup interface {
+	RemoveRunner(context.Context, RegistrationRequest) error
+}
+
 type RegistrationRequest struct {
 	Repository string
 	RunnerID   int64
@@ -94,6 +104,7 @@ type AssignmentRequest struct {
 	Spec           providers.RunnerSpec
 	Provider       providers.Provider
 	CapacityPoolID string
+	IsFork         bool
 }
 
 type Assignment struct {
@@ -109,6 +120,48 @@ type Service struct {
 	RunnerGroupID  *int64
 	CleanupTimeout time.Duration
 	Now            func() time.Time
+	Policy         AssignmentPolicy
+	mu             sync.Mutex
+	inflight       map[string]struct{}
+}
+
+// AssignmentPolicy is the assignment-side counterpart to github.ScopePolicy.
+// It prevents a caller from bypassing webhook admission with a direct request.
+type AssignmentPolicy struct {
+	Repositories  []string
+	AllowedLabels []string
+	RunnerGroupID int64
+	AllowForks    bool
+}
+
+func (p AssignmentPolicy) validate(request AssignmentRequest, configuredGroupID *int64) error {
+	if len(p.Repositories) == 0 || len(p.AllowedLabels) == 0 {
+		return fmt.Errorf("%w: assignment repository and label allowlists are required", ErrInvalidRequest)
+	}
+	if p.RunnerGroupID <= 0 || configuredGroupID == nil || *configuredGroupID != p.RunnerGroupID {
+		return fmt.Errorf("%w: configured runner group does not match the approved policy", ErrInvalidRequest)
+	}
+	if request.IsFork && !p.AllowForks {
+		return ErrForkNotAllowed
+	}
+	if !containsFold(p.Repositories, request.Job.Repository) {
+		return fmt.Errorf("%w: repository %q is not approved", ErrInvalidRequest, request.Job.Repository)
+	}
+	for _, label := range request.Job.Labels {
+		if !containsFold(p.AllowedLabels, label) {
+			return fmt.Errorf("%w: label %q is not approved", ErrInvalidRequest, label)
+		}
+	}
+	return nil
+}
+
+func containsFold(values []string, want string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), strings.TrimSpace(want)) {
+			return true
+		}
+	}
+	return false
 }
 
 // AssignmentService is the contract consumed by scheduling/controller code.
@@ -123,6 +176,15 @@ func (s *Service) Assign(ctx context.Context, request AssignmentRequest) (Assign
 	if request.Job.ID == "" || request.Job.Repository == "" || request.Spec.ExpiresAt.IsZero() {
 		return Assignment{}, ErrInvalidRequest
 	}
+	if len(s.Policy.Repositories) > 0 || len(s.Policy.AllowedLabels) > 0 {
+		if err := s.Policy.validate(request, s.RunnerGroupID); err != nil {
+			return Assignment{}, err
+		}
+	}
+	if !s.beginAssignment(request.Job.ID) {
+		return Assignment{}, ErrAssignmentInProgress
+	}
+	defer s.endAssignment(request.Job.ID)
 	now := time.Now
 	if s.Now != nil {
 		now = s.Now
@@ -179,6 +241,11 @@ func (s *Service) Assign(ctx context.Context, request AssignmentRequest) (Assign
 		}
 		if terminateErr := provider.Terminate(cleanupCtx, instance); terminateErr != nil {
 			return Assignment{}, fmt.Errorf("%w; terminate provisioned runner: %v", cause, terminateErr)
+		}
+		if cleanupRegistration, ok := s.Registration.(RegistrationCleanup); ok {
+			if removeErr := cleanupRegistration.RemoveRunner(cleanupCtx, RegistrationRequest{Repository: request.Job.Repository, RunnerID: jit.RunnerID, RunnerName: jit.RunnerName}); removeErr != nil {
+				return Assignment{}, fmt.Errorf("%w; remove GitHub runner: %v", cause, removeErr)
+			}
 		}
 		if runnerPersisted {
 			runner.State = state.RunnerTerminated
@@ -251,6 +318,25 @@ func (s *Service) Assign(ctx context.Context, request AssignmentRequest) (Assign
 		return cleanup(fmt.Errorf("persist registered runner: %w", err))
 	}
 	return Assignment{Runner: runner, Registration: ready}, nil
+}
+
+func (s *Service) beginAssignment(jobID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.inflight == nil {
+		s.inflight = make(map[string]struct{})
+	}
+	if _, exists := s.inflight[jobID]; exists {
+		return false
+	}
+	s.inflight[jobID] = struct{}{}
+	return true
+}
+
+func (s *Service) endAssignment(jobID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.inflight, jobID)
 }
 
 func boolInt(value bool) int {

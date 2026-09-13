@@ -1,0 +1,43 @@
+{
+  "apiVersion": "ami.leorunners.io/v1",
+  "kind": "RunnerImageContract",
+  "metadata": {"name": "base-linux-x64", "version": "1.0.0"},
+  "spec": {
+    "source": {
+      "operating_system": "amazon-linux-2023",
+      "architecture": "x86_64",
+      "ami_id": "ami-0123456789abcdef0",
+      "resolution": "explicit-pinned-input"
+    },
+    "runtime": {
+      "user": "runner",
+      "allow_root_jobs": false,
+      "credentials_baked_in": false,
+      "jit_config_baked_in": false,
+      "imds_v2_required": true,
+      "encrypted_root_volume": true
+    },
+    "packages": [
+      {"name": "ca-certificates", "source": "amazon-linux-2023-dnf", "version_policy": "pinned-by-image-build", "provenance": "rpm-query"},
+      {"name": "curl-minimal", "source": "amazon-linux-2023-dnf", "version_policy": "pinned-by-image-build", "provenance": "rpm-query"},
+      {"name": "git", "source": "amazon-linux-2023-dnf", "version_policy": "pinned-by-image-build", "provenance": "rpm-query"},
+      {"name": "jq", "source": "amazon-linux-2023-dnf", "version_policy": "pinned-by-image-build", "provenance": "rpm-query"},
+      {"name": "make", "source": "amazon-linux-2023-dnf", "version_policy": "pinned-by-image-build", "provenance": "rpm-query"},
+      {"name": "openssl", "source": "amazon-linux-2023-dnf", "version_policy": "pinned-by-image-build", "provenance": "rpm-query"},
+      {"name": "unzip", "source": "amazon-linux-2023-dnf", "version_policy": "pinned-by-image-build", "provenance": "rpm-query"}
+    ],
+    "artifact": {
+      "version": "1.0.0",
+      "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "digest_source": "packer-manifest-and-ami-snapshot",
+      "immutable": true
+    },
+    "rollback": {
+      "strategy": "previous-approved-image",
+      "previous_version": null,
+      "previous_image_id": null,
+      "retention_count": 3,
+      "promotion_approval_required": true
+    }
+  }
+}

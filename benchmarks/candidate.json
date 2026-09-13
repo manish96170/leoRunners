@@ -1,25 +1,49 @@
 {
-  "schema_version": "phase-7.v1",
+  "schema_version": "phase-38.v1",
   "record_id": "candidate-linux-x64-001",
   "role": "candidate",
-  "comparison": { "comparison_id": "phase-7-sample-001", "pair_key": "checkout-build|linux-x64|us-east-1|20260913" },
+  "comparison": { "comparison_id": "phase-38-sample-001", "pair_key": "leo-runners-ci|amd64|offline|20260913", "max_duration_regression_percent": 15, "max_cost_regression_percent": 20 },
   "provenance": {
     "collected_at": "2026-09-13T10:15:00Z",
     "collector": "tools/benchmark",
     "collector_version": "phase-5.v1",
     "source": "offline-fixture",
     "evidence_level": "fixture",
+    "execution_class": "synthetic",
     "notes": "Illustrative offline record; not a cloud cost claim."
   },
+  "workload": {
+    "id": "leo-runners-ci",
+    "manifest_version": "1.0.0",
+    "manifest_digest": "sha256:8fc0ae8b8dd1698e3f6d3566a7782062cb2f9272b97b68d9254f037a010a83ef",
+    "repository": "github.com/manish96170/leoRunners",
+    "commit": "3d8acb1904854728572e7f45459255f7f2113858",
+    "workflow": ".github/workflows/ci.yml",
+    "command_digest": "sha256:3c964eca7067c2d505c40d3076fe152704d65c44bb7dc5d4d8b75bbbfa8b338e"
+  },
   "identity": {
-    "workload_id": "checkout-build",
-    "workload_version": "2026.09.13",
-    "workload_commit": "0123456789abcdef0123456789abcdef01234567",
+    "workload_id": "leo-runners-ci",
+    "workload_version": "1.0.0",
+    "workload_commit": "3d8acb1904854728572e7f45459255f7f2113858",
     "image_id": "ami-candidate-linux-x64-v2",
     "image_digest": "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
     "region": "us-east-1",
     "architecture": "amd64",
-    "runner_profile": "base-linux-x64"
+    "runner_profile": "base-linux-x64",
+    "provider": "offline"
+  },
+  "comparability": {
+    "protocol_id": "cold-start-v1",
+    "repetitions": 1,
+    "warmup_runs": 0,
+    "cache_mode": "disabled",
+    "toolchain_digest": "sha256:0fc4e0240d7f83c3a365f742b112a7f284efd70ade90373737a6fb2ff0b45398",
+    "resource_profile": "base-linux-x64-4cpu-8gb"
+  },
+  "redaction": {
+    "status": "redacted",
+    "secrets_scanned": true,
+    "raw_payloads_excluded": true
   },
   "timing": {
     "unit": "milliseconds",

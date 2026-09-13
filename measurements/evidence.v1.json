@@ -1,0 +1,78 @@
+{
+  "apiVersion": "measurements.leorunners.io/v1",
+  "kind": "MeasurementEvidence",
+  "metadata": { "name": "offline-cache-network-cost", "version": "1.0.0" },
+  "spec": {
+    "measurement_id": "measurement-phase-50-001",
+    "provenance": {
+      "collected_at": "2026-09-14T08:00:00Z",
+      "collector": "tools/measurement-validation",
+      "collector_version": "1.0.0",
+      "source": "offline-fixture",
+      "evidence_level": "fixture",
+      "execution_class": "synthetic"
+    },
+    "identity": {
+      "workload_id": "leo-runners-ci",
+      "workload_version": "1.0.0",
+      "workload_commit": "3d8acb1904854728572e7f45459255f7f2113858",
+      "provider": "offline",
+      "region": "offline-1",
+      "architecture": "arm64",
+      "runner_profile": "base-linux-x64",
+      "cache_mode": "enabled",
+      "network_profile": "private-hybrid"
+    },
+    "comparability": {
+      "comparison_id": "phase-50-offline",
+      "protocol_id": "cache-network-v1",
+      "sample_count": 10,
+      "warmup_count": 2,
+      "unit_system": "si",
+      "pricing_source": "fixture",
+      "comparison_key": "leo-runners-ci|arm64|enabled|private-hybrid|offline"
+    },
+    "cache": {
+      "backend": "s3",
+      "namespace": { "tenant_ref": "ref:tenant-demo", "namespace_ref": "ref:ci-main", "prefix_ref": "ref:cache-v1" },
+      "key_scheme": "sha256-content-addressed",
+      "operations": { "lookup_count": 10, "hit_count": 7, "miss_count": 3, "save_count": 3, "restore_count": 7, "invalidation_count": 0 },
+      "hit_rate": 0.7
+    },
+    "network": {
+      "egress_mode": "hybrid",
+      "endpoint_mode": "gateway-and-interface",
+      "nat_gateway": { "enabled": true, "bytes": 12000000, "unit": "bytes", "cost_usd": 0.00054 },
+      "vpc_endpoint": { "enabled": true, "bytes": 88000000, "unit": "bytes", "cost_usd": 0.00088 },
+      "egress": { "enabled": true, "bytes": 12000000, "unit": "bytes", "cost_usd": 0.00054 }
+    },
+    "startup": {
+      "unit": "milliseconds",
+      "phases": [
+        { "name": "provision", "duration_ms": 28000, "status": "measured" },
+        { "name": "boot", "duration_ms": 41000, "status": "measured" },
+        { "name": "registration", "duration_ms": 7000, "status": "measured" },
+        { "name": "ready", "duration_ms": 76000, "status": "measured" },
+        { "name": "total", "duration_ms": 76000, "status": "measured" }
+      ],
+      "total_ms": 76000
+    },
+    "cost": {
+      "currency": "USD",
+      "compute_usd": 0.0042,
+      "storage_usd": 0.0001,
+      "network_usd": 0.00142,
+      "total_usd": 0.00572,
+      "assumptions": {
+        "compute_rate_usd_per_hour": 0.012,
+        "storage_rate_usd_per_gb_month": 0.023,
+        "nat_rate_usd_per_gb": 0.045,
+        "endpoint_rate_usd_per_gb": 0.01,
+        "runtime_hours": 0.35,
+        "storage_gb": 0.004
+      },
+      "pricing_as_of": "2026-09-14T00:00:00Z"
+    },
+    "redaction": { "status": "redacted", "secrets_scanned": true, "raw_payloads_excluded": true, "identifiers_hashed": true }
+  }
+}

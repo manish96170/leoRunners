@@ -19,6 +19,9 @@ enable_nat_gateway          = false
 nat_public_subnet_id        = null
 nat_private_route_table_ids = []
 
+# Evidence label only; it does not change infrastructure.
+egress_mode = "nat"
+
 tags = {
   environment = "dev"
 }

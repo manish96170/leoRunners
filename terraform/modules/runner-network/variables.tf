@@ -114,6 +114,17 @@ variable "tags" {
   default     = {}
 }
 
+variable "egress_mode" {
+  description = "Declared egress topology for reachability evidence. Metadata only; it does not create or route resources."
+  type        = string
+  default     = "nat"
+
+  validation {
+    condition     = contains(["nat", "vpc-endpoint", "hybrid", "approved-proxy"], var.egress_mode)
+    error_message = "egress_mode must be nat, vpc-endpoint, hybrid, or approved-proxy."
+  }
+}
+
 variable "enable_dns_support" {
   description = "Documentation-only guard for the existing VPC DNS requirement. The module does not mutate the VPC."
   type        = bool

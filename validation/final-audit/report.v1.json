@@ -1,0 +1,94 @@
+{
+  "apiVersion": "final-audit.leorunners.io/v1",
+  "kind": "FinalAuditReport",
+  "metadata": {
+    "name": "leo-runners-final-audit",
+    "version": "1.0.0"
+  },
+  "spec": {
+    "status": "BLOCKED",
+    "read_only": true,
+    "live_mutation_invoked": false,
+    "redaction": {
+      "status": "redacted",
+      "raw_output_included": false,
+      "secrets_scanned": true
+    },
+    "checks": [
+      {
+        "name": "required-docs",
+        "status": "PASS",
+        "exit_code": 0,
+        "message": "required architecture, security, validation, and operations documents are present",
+        "environment_gated": false
+      },
+      {
+        "name": "phase-tracking",
+        "status": "BLOCKED",
+        "exit_code": 1,
+        "message": "tracking files do not identify all audited completed phases",
+        "environment_gated": false
+      },
+      {
+        "name": "security-boundaries",
+        "status": "PASS",
+        "exit_code": 0,
+        "message": "security policy, non-root runtime controls, and advisory AI defaults are present",
+        "environment_gated": false
+      },
+      {
+        "name": "no-live-defaults",
+        "status": "PASS",
+        "exit_code": 0,
+        "message": "live providers and optional features are opt-in by default",
+        "environment_gated": false
+      },
+      {
+        "name": "test-validator-coverage",
+        "status": "PASS",
+        "exit_code": 0,
+        "message": "controller tests and offline validator entrypoints are present",
+        "environment_gated": false
+      },
+      {
+        "name": "known-environment-gaps",
+        "status": "WARN",
+        "exit_code": 2,
+        "message": "known environment-gated work remains outside this offline audit",
+        "environment_gated": true
+      }
+    ],
+    "environment_gaps": [
+      {
+        "name": "known-environment-gaps",
+        "status": "environment-gated",
+        "message": "operator credentials, live cloud, image, cluster, or production evidence gaps remain"
+      },
+      {
+        "name": "missing-gcloud",
+        "status": "environment-gated",
+        "message": "gcloud is unavailable for provider-specific validation"
+      },
+      {
+        "name": "missing-docker",
+        "status": "environment-gated",
+        "message": "docker is unavailable for provider-specific validation"
+      },
+      {
+        "name": "missing-kubectl",
+        "status": "environment-gated",
+        "message": "kubectl is unavailable for provider-specific validation"
+      },
+      {
+        "name": "missing-packer",
+        "status": "environment-gated",
+        "message": "packer is unavailable for provider-specific validation"
+      }
+    ],
+    "summary": {
+      "pass": 4,
+      "warnings": 1,
+      "blocked": 1
+    }
+  }
+}

@@ -31,6 +31,16 @@ type fakeRegistration struct {
 	err     error
 }
 
+type cleanupRegistration struct {
+	fakeRegistration
+	removed int
+}
+
+func (f *cleanupRegistration) RemoveRunner(_ context.Context, _ RegistrationRequest) error {
+	f.removed++
+	return nil
+}
+
 type recordingProvider struct {
 	delegate *providers.FakeProvider
 	spec     providers.RunnerSpec
@@ -58,7 +68,7 @@ func (f *fakeRegistration) WaitForRegistration(_ context.Context, request Regist
 	return f.runner, nil
 }
 
-func testService(jit *fakeJIT, registration *fakeRegistration) (*Service, *providers.FakeProvider, *state.MemoryRepository) {
+func testService(jit *fakeJIT, registration RegistrationVerifier) (*Service, *providers.FakeProvider, *state.MemoryRepository) {
 	repo := state.NewMemoryRepository()
 	provider := providers.NewFakeProvider(providers.FakeConfig{})
 	return &Service{State: repo, Provider: provider, JIT: jit, Registration: registration, Now: func() time.Time { return time.Unix(100, 0) }}, provider, repo
@@ -114,6 +124,75 @@ func TestAssignPassesJITBootstrapMetadataAndPersistsIdentityWithoutConfig(t *tes
 	}
 }
 
+func TestAssignPassesRequestedLabelsAndRunnerGroupToJIT(t *testing.T) {
+	groupID := int64(42)
+	jit := &fakeJIT{config: JITConfig{EncodedConfig: "opaque", RunnerID: 92, RunnerName: "ephemeral-92"}}
+	registration := &fakeRegistration{runner: GitHubRunner{ID: 92, Name: "ephemeral-92"}}
+	service, _, _ := testService(jit, registration)
+	service.RunnerGroupID = &groupID
+
+	job := testJob()
+	job.Labels = []string{"self-hosted", "linux-x64", "ephemeral"}
+	if _, err := service.Assign(context.Background(), AssignmentRequest{
+		Job:  job,
+		Spec: providers.RunnerSpec{ExpiresAt: time.Unix(200, 0)},
+	}); err != nil {
+		t.Fatalf("Assign() error = %v", err)
+	}
+	if jit.request.RunnerGroupID == nil || *jit.request.RunnerGroupID != groupID {
+		t.Fatalf("runner group = %#v, want %d", jit.request.RunnerGroupID, groupID)
+	}
+	if strings.Join(jit.request.Labels, ",") != strings.Join(job.Labels, ",") {
+		t.Fatalf("labels = %#v, want %#v", jit.request.Labels, job.Labels)
+	}
+	job.Labels[0] = "mutated-after-assignment"
+	if jit.request.Labels[0] == job.Labels[0] {
+		t.Fatal("JIT labels alias caller-owned job labels")
+	}
+}
+
+type cancellationRegistration struct {
+	started chan struct{}
+}
+
+func (r cancellationRegistration) WaitForRegistration(ctx context.Context, _ RegistrationRequest) (GitHubRunner, error) {
+	close(r.started)
+	<-ctx.Done()
+	return GitHubRunner{}, ctx.Err()
+}
+
+func TestAssignCancellationCleansUpProvisionedRunner(t *testing.T) {
+	jit := &fakeJIT{config: JITConfig{EncodedConfig: "opaque", RunnerID: 93, RunnerName: "ephemeral-93"}}
+	registration := cancellationRegistration{started: make(chan struct{})}
+	service, provider, repo := testService(jit, registration)
+	service.CleanupTimeout = time.Second
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := service.Assign(ctx, AssignmentRequest{Job: testJob(), Spec: providers.RunnerSpec{ExpiresAt: time.Unix(200, 0)}})
+		done <- err
+	}()
+	select {
+	case <-registration.started:
+		cancel()
+	case <-time.After(time.Second):
+		t.Fatal("registration verifier was not called")
+	}
+	if err := <-done; !errors.Is(err, ErrRegistrationFailed) {
+		t.Fatalf("Assign() error = %v, want registration failure", err)
+	}
+	if provider.Active() != 0 {
+		t.Fatalf("active provider instances = %d", provider.Active())
+	}
+	runners, err := repo.ListRunners(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runners) != 1 || runners[0].State != state.RunnerTerminated {
+		t.Fatalf("runners after cancellation = %#v", runners)
+	}
+}
+
 func TestAssignCleansUpWhenRegistrationFails(t *testing.T) {
 	jit := &fakeJIT{config: JITConfig{EncodedConfig: "secret", RunnerID: 3, RunnerName: "runner-3"}}
 	registration := &fakeRegistration{err: errors.New("runner never registered")}
@@ -138,6 +217,52 @@ func TestAssignCleansUpWhenRegistrationFails(t *testing.T) {
 	}
 	if len(events) != 2 || events[0].Type != "runner.registration.failed" {
 		t.Fatalf("events = %#v", events)
+	}
+}
+
+func TestAssignRejectsForkAndOutOfScopeRequestsBeforeJIT(t *testing.T) {
+	jit := &fakeJIT{config: JITConfig{EncodedConfig: "opaque", RunnerID: 1, RunnerName: "runner"}}
+	registration := &fakeRegistration{runner: GitHubRunner{ID: 1, Name: "runner"}}
+	service, _, _ := testService(jit, registration)
+	groupID := int64(42)
+	service.RunnerGroupID = &groupID
+	service.Policy = AssignmentPolicy{Repositories: []string{"acme/widgets"}, AllowedLabels: []string{"linux"}, RunnerGroupID: groupID}
+	request := AssignmentRequest{Job: testJob(), IsFork: true, Spec: providers.RunnerSpec{ExpiresAt: time.Unix(200, 0)}}
+	if err := func() error { _, err := service.Assign(context.Background(), request); return err }(); !errors.Is(err, ErrForkNotAllowed) {
+		t.Fatalf("error = %v", err)
+	}
+	if jit.request.Repository != "" {
+		t.Fatal("JIT was called for a fork")
+	}
+	request.IsFork = false
+	request.Job.Repository = "other/widgets"
+	if err := func() error { _, err := service.Assign(context.Background(), request); return err }(); err == nil {
+		t.Fatal("out-of-scope repository was accepted")
+	}
+}
+
+func TestAssignmentSingleUseGuardRejectsConcurrentDuplicate(t *testing.T) {
+	service, _, _ := testService(&fakeJIT{}, &fakeRegistration{})
+	if !service.beginAssignment("job-1") {
+		t.Fatal("first assignment was rejected")
+	}
+	if service.beginAssignment("job-1") {
+		t.Fatal("duplicate assignment was admitted")
+	}
+	service.endAssignment("job-1")
+	if !service.beginAssignment("job-1") {
+		t.Fatal("assignment was not released after completion")
+	}
+	service.endAssignment("job-1")
+}
+
+func TestAssignCallsRegistrationCleanupAfterRegistrationFailure(t *testing.T) {
+	jit := &fakeJIT{config: JITConfig{EncodedConfig: "opaque", RunnerID: 8, RunnerName: "runner-8"}}
+	registration := &cleanupRegistration{fakeRegistration: fakeRegistration{err: errors.New("registration failed")}}
+	service, _, _ := testService(jit, registration)
+	_, err := service.Assign(context.Background(), AssignmentRequest{Job: testJob(), Spec: providers.RunnerSpec{ExpiresAt: time.Unix(200, 0)}})
+	if !errors.Is(err, ErrRegistrationFailed) || registration.removed != 1 {
+		t.Fatalf("error = %v removed = %d", err, registration.removed)
 	}
 }
 

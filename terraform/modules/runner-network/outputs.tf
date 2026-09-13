@@ -51,3 +51,18 @@ output "cost_warnings" {
     var.enable_vpc_endpoints && length(local.gateway_services) > 0 ? ["Gateway endpoints enabled: no hourly endpoint charge, but route-table scope and endpoint policies must be reviewed."] : [],
   )
 }
+
+output "reachability_labels" {
+  description = "Stable labels for offline reachability and billing reconciliation evidence."
+  value = {
+    egress_mode  = var.egress_mode
+    subnet_class = "private-preferred"
+    dns_mode     = var.enable_dns_support && var.enable_dns_hostnames ? "cloud-resolver-required" : "invalid"
+    isolation    = "inbound-deny-imdsv2"
+    cost_labels = concat(
+      contains(["nat", "hybrid"], var.egress_mode) ? ["nat-hourly", "nat-processing-per-gb"] : [],
+      contains(["vpc-endpoint", "hybrid"], var.egress_mode) ? ["endpoint-hourly-or-route-scope", "endpoint-processing-per-gb"] : [],
+      var.egress_mode == "approved-proxy" ? ["proxy-service-cost", "proxy-processing-cost"] : [],
+    )
+  }
+}

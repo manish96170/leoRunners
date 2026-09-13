@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ami.leorunners.io/schemas/startup-report.v1.json",
+  "type": "object",
+  "required": ["apiVersion", "kind", "mode", "status", "samples", "summary", "thresholds", "provenance", "redaction"],
+  "properties": {
+    "apiVersion": {"const": "ami.leorunners.io/v1"},
+    "kind": {"const": "AMIStartupBenchmarkReport"},
+    "mode": {"enum": ["fake", "real-ec2"]},
+    "status": {"enum": ["PASS", "FAIL"]},
+    "samples": {"type": "array", "minItems": 1},
+    "summary": {"type": "object"},
+    "thresholds": {"type": "object", "required": ["max_total_startup_ms", "max_p95_total_startup_ms", "max_p99_total_startup_ms", "max_regression_percent"]},
+    "provenance": {"type": "object", "required": ["image_id", "image_digest", "profile_version", "source_ami", "redacted", "secret_free"], "properties": {"image_digest": {"pattern": "^sha256:[0-9a-f]{64}$"}, "redacted": {"const": true}, "secret_free": {"const": true}}},
+    "redaction": {"type": "object", "required": ["applied"]}
+  },
+  "additionalProperties": false
+}

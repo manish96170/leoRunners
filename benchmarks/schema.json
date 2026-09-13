@@ -1,42 +1,59 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://leo-runners.example/schemas/phase-7-benchmark-evidence.v1.json",
-  "title": "Leo Runners Phase 7 Benchmark Evidence",
-  "description": "Versioned, reproducible evidence for baseline and candidate ephemeral CI runs.",
+  "$id": "https://leo-runners.example/schemas/phase-38-benchmark-evidence.v1.json",
+  "title": "Leo Runners Phase 38 Benchmark Evidence",
+  "description": "Versioned evidence tied to an immutable workload manifest and comparable baseline/candidate runs.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "record_id", "role", "comparison", "provenance", "identity", "timing", "cost", "result"],
+  "required": ["schema_version", "record_id", "role", "comparison", "provenance", "workload", "identity", "comparability", "redaction", "timing", "cost", "result"],
   "properties": {
-    "schema_version": { "const": "phase-7.v1" },
+    "schema_version": { "const": "phase-38.v1" },
     "record_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$" },
     "role": { "enum": ["baseline", "candidate"] },
     "comparison": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["comparison_id", "pair_key"],
+      "required": ["comparison_id", "pair_key", "max_duration_regression_percent", "max_cost_regression_percent"],
       "properties": {
         "comparison_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$" },
-        "pair_key": { "type": "string", "minLength": 1 }
+        "pair_key": { "type": "string", "minLength": 1 },
+        "max_duration_regression_percent": { "type": "number", "minimum": 0, "maximum": 1000 },
+        "max_cost_regression_percent": { "type": "number", "minimum": 0, "maximum": 1000 }
       }
     },
     "provenance": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["collected_at", "collector", "source", "evidence_level"],
+      "required": ["collected_at", "collector", "source", "evidence_level", "execution_class"],
       "properties": {
         "collected_at": { "type": "string", "format": "date-time" },
         "collector": { "type": "string", "minLength": 1 },
         "collector_version": { "type": "string", "minLength": 1 },
         "source": { "type": "string", "enum": ["offline-fixture", "controlled-run", "aws-run", "github-run"] },
         "evidence_level": { "type": "string", "enum": ["fixture", "measured", "attested"] },
+        "execution_class": { "type": "string", "enum": ["synthetic", "real"] },
         "source_urls": { "type": "array", "items": { "type": "string", "format": "uri" }, "uniqueItems": true },
         "notes": { "type": "string" }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "manifest_version", "manifest_digest", "repository", "commit", "workflow", "command_digest"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{2,127}$" },
+        "manifest_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "manifest_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "repository": { "type": "string", "pattern": "^github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "workflow": { "type": "string", "pattern": "^(?!/|.*\\.\\.).+$" },
+        "command_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
       }
     },
     "identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["workload_id", "workload_version", "workload_commit", "image_id", "image_digest", "region", "architecture", "runner_profile"],
+      "required": ["workload_id", "workload_version", "workload_commit", "image_id", "image_digest", "region", "architecture", "runner_profile", "provider"],
       "properties": {
         "workload_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{1,127}$" },
         "workload_version": { "type": "string", "minLength": 1 },
@@ -45,7 +62,31 @@
         "image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
         "region": { "type": "string", "pattern": "^[a-z]{2}-[a-z]+-[0-9]+$" },
         "architecture": { "enum": ["amd64", "arm64"] },
-        "runner_profile": { "type": "string", "minLength": 1 }
+        "runner_profile": { "type": "string", "minLength": 1 },
+        "provider": { "enum": ["aws", "gcp", "offline"] }
+      }
+    },
+    "comparability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "repetitions", "warmup_runs", "cache_mode", "toolchain_digest", "resource_profile"],
+      "properties": {
+        "protocol_id": { "type": "string", "minLength": 1 },
+        "repetitions": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "warmup_runs": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "cache_mode": { "enum": ["disabled", "cold", "warm", "observe-only"] },
+        "toolchain_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "resource_profile": { "type": "string", "minLength": 1 }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "secrets_scanned", "raw_payloads_excluded"],
+      "properties": {
+        "status": { "const": "redacted" },
+        "secrets_scanned": { "const": true },
+        "raw_payloads_excluded": { "const": true }
       }
     },
     "timing": {

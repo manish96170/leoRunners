@@ -59,6 +59,12 @@ The repository is a greenfield Go project. Phase 0 documentation and the Phase 1
 - Phases 28-35 add tenant isolation, archive retention, cache telemetry,
   CloudWatch routing, Docker/Kubernetes checks, IAM simulation, multi-replica
   failover tests, and the read-only release-validation gate.
+- Phases 36-45 add cloud preflight/live-gate hardening, workload/image/network
+  evidence, event-sink checks, intelligence evaluation, GitHub validation,
+  Terraform checks, and the final readiness gate.
+- Phases 46-54 add production config/secrets, GCP/GitHub scope validation,
+  AMI and measurement evidence, multi-cloud comparison, artifact security,
+  recovery evidence, and the final audit pack.
 
 ## Continue here
 

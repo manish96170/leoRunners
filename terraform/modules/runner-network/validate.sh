@@ -17,6 +17,8 @@ grep -Fq 'protocol    = "tcp"' main.tf || { echo 'TCP egress rule is missing' >&
 grep -Fq 'from_port   = 443' main.tf || { echo 'HTTPS egress rule is missing' >&2; exit 2; }
 grep -Fq 'from_port   = 53' main.tf || { echo 'DNS egress rule is missing' >&2; exit 2; }
 grep -Fq 'cost_warnings' outputs.tf || { echo 'cost warnings output is missing' >&2; exit 2; }
+grep -Fq 'reachability_labels' outputs.tf || { echo 'reachability labels output is missing' >&2; exit 2; }
+grep -Fq 'variable "egress_mode"' variables.tf || { echo 'egress mode metadata variable is missing' >&2; exit 2; }
 
 if rg -n 'resource\s+"aws_(vpc|subnet|route_table|internet_gateway)"' --glob '*.tf' .; then
   echo 'module must not create VPC, subnet, route-table, or internet-gateway resources' >&2

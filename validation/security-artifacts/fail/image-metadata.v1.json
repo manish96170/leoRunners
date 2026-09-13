@@ -1,0 +1,15 @@
+{
+  "apiVersion": "security.leorunners.io/v1",
+  "kind": "BuiltImageMetadata",
+  "metadata": {"name": "unsafe-runner", "version": "1.0.0"},
+  "spec": {
+    "digest": "latest",
+    "os": "linux",
+    "architecture": "amd64",
+    "user": "0",
+    "readOnlyRootFilesystem": false,
+    "secretsBakedIn": true,
+    "ai": {"enabled": true}
+  },
+  "provenance": {"builder": "local"}
+}

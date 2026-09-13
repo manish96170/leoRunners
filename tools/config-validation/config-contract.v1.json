@@ -1,0 +1,9 @@
+{
+  "version": "v1",
+  "requiredSecrets": [
+    {"env": "GITHUB_WEBHOOK_SECRET", "secret": "leo-runners-controller", "key": "GITHUB_WEBHOOK_SECRET", "required": true},
+    {"env": "GITHUB_APP_INSTALLATION_TOKEN", "secret": "leo-runners-controller", "key": "GITHUB_APP_INSTALLATION_TOKEN", "requiredWhen": "GITHUB_JIT_ENABLED=true"},
+    {"env": "AI_API_KEY", "secret": "leo-runners-controller", "key": "AI_API_KEY", "requiredWhen": "AI_ENABLED=true and AI_PROVIDER=hosted"}
+  ],
+  "unsafeFeaturesDisabledByDefault": ["GITHUB_JIT_ENABLED", "AI_ENABLED", "EXTENSIONS_ENABLED"]
+}

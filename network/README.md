@@ -37,3 +37,17 @@ profile, destination ID, check result, latency, timestamp, cost class, and
 cleanup result. Use opaque fingerprints for sensitive identifiers. Never put
 credentials, signed URLs, authorization headers, full user data, or customer
 payloads in logs or metric labels.
+
+## Reachability and cost measurement
+
+`reachability-matrix.v1.json` is the machine-readable contract for private
+subnets, cloud DNS, required HTTPS destinations, isolation, and egress cost
+labels. Validate it offline with `tools/network-validation/validate.sh`.
+
+`tools/network-validation/measure.sh` is an explicitly guarded, read-only
+probe. It resolves matrix destinations and performs bounded TLS requests from
+the runner placement, labeling results as `nat`, `vpc-endpoint`, `hybrid`, or
+`approved-proxy` and carrying the corresponding billing categories. It never
+changes routes, endpoints, security groups, or DNS. Required probe failures
+return a failing exit status; billing must still be reconciled against provider
+usage data.

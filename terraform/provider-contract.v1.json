@@ -1,0 +1,47 @@
+{
+  "schema_version": "terraform-provider-contract.v1",
+  "provider": {
+    "source": "hashicorp/aws",
+    "lock_version_min": "5.0.0",
+    "lock_version_max_exclusive": "7.0.0"
+  },
+  "required_lock_scopes": [
+    "environments/dev",
+    "modules/controller-state",
+    "modules/controller-iam",
+    "modules/runner-runtime",
+    "modules/runner-network"
+  ],
+  "optional_lock_scopes": [
+    "modules/observability"
+  ],
+  "root": {
+    "path": "environments/dev",
+    "modules": {
+      "controller_state": "../../modules/controller-state",
+      "controller_iam": "../../modules/controller-iam",
+      "runner_runtime": "../../modules/runner-runtime",
+      "observability": "../../modules/observability"
+    },
+    "required_module_inputs": {
+      "controller_state": ["table_name", "enable_point_in_time_recovery", "enable_deletion_protection", "kms_key_arn", "tags"],
+      "controller_iam": ["role_name", "trusted_service_principals", "trusted_principal_arns", "oidc_provider_arn", "oidc_condition_prefix", "oidc_subjects", "permissions_boundary_arn", "generated_policy_json", "tags"],
+      "runner_runtime": ["name", "enable_ssm", "permissions_boundary_arn", "tags"],
+      "observability": ["name", "namespace", "log_retention_days", "kms_key_id", "skip_destroy", "metric_dimensions", "alarm_actions", "tags"]
+    },
+    "required_output_references": {
+      "state_table_name": "module.controller_state.table_name",
+      "state_table_arn": "module.controller_state.table_arn",
+      "controller_role_arn": "module.controller_iam.role_arn",
+      "runner_role_arn": "module.runner_runtime.role_arn",
+      "runner_instance_profile_name": "module.runner_runtime.instance_profile_name"
+    },
+    "outputs": [
+      "state_table_name",
+      "state_table_arn",
+      "controller_role_arn",
+      "runner_role_arn",
+      "runner_instance_profile_name"
+    ]
+  }
+}

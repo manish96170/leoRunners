@@ -20,7 +20,19 @@ fail "kind must be WorkloadManifest" unless data["kind"] == "WorkloadManifest"
 metadata = data.fetch("metadata")
 spec = data.fetch("spec")
 fail "metadata.version must be semantic version text" unless metadata["version"].to_s.match?(/\A\d+\.\d+\.\d+\z/)
-fail "metadata.source is required" unless metadata.fetch("source").is_a?(Hash)
+source = metadata.fetch("source")
+fail "metadata.source is required" unless source.is_a?(Hash)
+fail "metadata.source.repository must identify the fixed repository" unless source["repository"] == "github.com/manish96170/leoRunners"
+fail "metadata.source.revision must be a full commit" unless source["revision"].to_s.match?(/\A[0-9a-f]{40}\z/)
+fail "metadata.source.inspectedAt must be UTC date-time" unless source["inspectedAt"].to_s.match?(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\z/)
+
+workload = spec.fetch("workload")
+fail "spec.workload must be a mapping" unless workload.is_a?(Hash)
+fail "workload.id is required" unless workload["id"].to_s.match?(/\A[a-z0-9][a-z0-9-]{2,63}\z/)
+fail "workload.workflow must be repository-relative" unless workload["workflow"].to_s.match?(/\A(?!\/|\.\.)[^\s]+\z/)
+fail "workload.command must be bounded and secret-free" unless workload["command"].to_s.match?(/\A(?!.*(?:AWS_SECRET|TOKEN|PASSWORD|SECRET|curl\s+[^\s]+:\/\/))[^\r\n]{1,240}\z/i)
+fail "workload.commandDigest must be sha256" unless workload["commandDigest"].to_s.match?(/\Asha256:[0-9a-f]{64}\z/)
+fail "workload.provenance must be repository-defined" unless workload["provenance"] == "repository-defined"
 
 runner = spec.fetch("runner")
 %w[operatingSystem architecture cpu memoryGB diskGB imageProfile].each do |key|
@@ -65,6 +77,8 @@ caches.each do |item|
   fail "cache #{item['id']} measurements are required" unless item["measurements"].is_a?(Hash)
 end
 
-fail "validation section is required" unless spec["validation"].is_a?(Hash)
+validation = spec["validation"]
+fail "validation section is required" unless validation.is_a?(Hash)
+fail "validation.repositoryRevision must match source revision" unless validation["repositoryRevision"] == source["revision"]
 puts "valid workload manifest: #{path}"
 RUBY

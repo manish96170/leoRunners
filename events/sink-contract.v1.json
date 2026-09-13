@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leorunners.invalid/schemas/event-sink-contract.v1.json",
+  "title": "Leo Runners event sink and archive contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "events.leorunners.io/v1"},
+    "kind": {"const": "EventSinkContract"},
+    "metadata": {"type": "object"},
+    "spec": {"type": "object"}
+  }
+}

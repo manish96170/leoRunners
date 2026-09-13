@@ -45,6 +45,62 @@ type Config struct {
 	Extensions     ExtensionsConfig
 }
 
+// SecretRequirement describes the only secret material the controller may
+// receive from its runtime environment. Values are intentionally represented
+// by names and presence, never by their contents.
+type SecretRequirement struct {
+	EnvVar           string
+	KubernetesSecret string
+	KubernetesKey    string
+	Required         bool
+}
+
+// SecretContract returns the feature-gated secret contract for this config.
+// The returned values are safe to log, persist in diagnostics, or hand to a
+// deployment validator.
+func (c Config) SecretContract() []SecretRequirement {
+	return []SecretRequirement{
+		{EnvVar: "GITHUB_WEBHOOK_SECRET", KubernetesSecret: "leo-runners-controller", KubernetesKey: "GITHUB_WEBHOOK_SECRET", Required: true},
+		{EnvVar: "GITHUB_APP_INSTALLATION_TOKEN", KubernetesSecret: "leo-runners-controller", KubernetesKey: "GITHUB_APP_INSTALLATION_TOKEN", Required: c.GitHubJIT.Enabled},
+		{EnvVar: "AI_API_KEY", KubernetesSecret: "leo-runners-controller", KubernetesKey: "AI_API_KEY", Required: c.AI.Enabled && c.AI.Provider == "hosted"},
+	}
+}
+
+// SafeSnapshot contains configuration metadata without secret values. It is
+// suitable for persistence in reports and startup diagnostics.
+type SafeSnapshot struct {
+	Provider          string
+	JITEnabled        bool
+	AIEnabled         bool
+	ExtensionsEnabled bool
+	SecretPresence    map[string]bool
+}
+
+func (c Config) SafeSnapshot() SafeSnapshot {
+	presence := make(map[string]bool, len(c.SecretContract()))
+	for _, requirement := range c.SecretContract() {
+		presence[requirement.EnvVar] = c.secretSet(requirement.EnvVar)
+	}
+	return SafeSnapshot{
+		Provider: string(c.Provider.Name), JITEnabled: c.GitHubJIT.Enabled,
+		AIEnabled: c.AI.Enabled, ExtensionsEnabled: c.Extensions.Enabled,
+		SecretPresence: presence,
+	}
+}
+
+func (c Config) secretSet(envVar string) bool {
+	switch envVar {
+	case "GITHUB_WEBHOOK_SECRET":
+		return c.Webhook.Secret != ""
+	case "GITHUB_APP_INSTALLATION_TOKEN":
+		return c.GitHubJIT.InstallationToken != ""
+	case "AI_API_KEY":
+		return c.AI.APIKey != ""
+	default:
+		return false
+	}
+}
+
 type ServerConfig struct {
 	ListenAddr        string
 	ReadHeaderTimeout time.Duration
@@ -412,6 +468,9 @@ func (c Config) Validate() error {
 		if c.AI.Provider != "disabled" {
 			problems = append(problems, "AI provider must be disabled when AI is disabled")
 		}
+		if c.AI.APIKey != "" {
+			problems = append(problems, "AI_API_KEY must be unset when AI is disabled")
+		}
 	} else {
 		if c.AI.Provider != "local" && c.AI.Provider != "hosted" {
 			problems = append(problems, "enabled AI provider must be local or hosted")
@@ -424,6 +483,9 @@ func (c Config) Validate() error {
 		}
 		if c.AI.Provider == "hosted" && c.AI.Region == "" {
 			problems = append(problems, "hosted AI requires a region")
+		}
+		if c.AI.Provider == "hosted" && c.AI.APIKey == "" {
+			problems = append(problems, "hosted AI requires AI_API_KEY")
 		}
 	}
 	if c.AI.Timeout <= 0 || c.AI.MaxLogBytes <= 0 {
