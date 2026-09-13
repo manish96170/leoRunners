@@ -79,6 +79,10 @@ The repository is a greenfield Go project. Phase 0 documentation and the Phase 1
   derivation, and `docs/workload-intake.md`.
 - Phase 61 adds bounded controlled workload execution, evidence validation, and
   `docs/controlled-workload-validation.md`.
+- The latest implementation review remediation is present in the worktree;
+  remaining review gaps are limited to larger architecture/environment work
+  such as secure JIT secret transport, real provider integration, and sandbox
+  implementation.
 
 ## Continue here
 

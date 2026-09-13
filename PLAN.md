@@ -200,6 +200,10 @@ The specification requires investigation and architecture documentation before r
 - Added controlled workload execution contracts and a bounded detached-worktree
   runner with command allowlists, timeout/output limits, network refusal,
   redaction, and atomic owner-only evidence.
+- Incorporated the high-effort implementation review remediation for durable
+  webhook processing, target-specific live scope, GCP JIT fail-closed startup
+  metadata, provider-specific cleanup, fork/label admission, numeric DynamoDB
+  TTL, stable provider identities, and host-workload refusal.
 
 ### Next
 

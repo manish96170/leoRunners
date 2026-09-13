@@ -150,7 +150,7 @@ type item struct {
 
 	CreatedAt string `dynamodbav:"created_at,omitempty"`
 	UpdatedAt string `dynamodbav:"updated_at,omitempty"`
-	ExpiresAt string `dynamodbav:"expires_at,omitempty"`
+	ExpiresAt int64  `dynamodbav:"expires_at,omitempty"`
 
 	IdempotencyKey string            `dynamodbav:"idempotency_key,omitempty"`
 	Type           string            `dynamodbav:"type,omitempty"`
@@ -172,6 +172,21 @@ func timestamp(t time.Time) string {
 	}
 	return t.UTC().Format(time.RFC3339Nano)
 }
+
+func expiryUnix(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UTC().Unix()
+}
+
+func unixTime(value int64) time.Time {
+	if value <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(value, 0).UTC()
+}
+
 func parseTimestamp(v string) (time.Time, error) {
 	if v == "" {
 		return time.Time{}, nil
@@ -297,7 +312,7 @@ func jobItem(v state.Job) (item, error) {
 	if err != nil {
 		return item{}, err
 	}
-	return item{PK: "job#" + v.ID, SK: metaSK, Entity: entityJob, ID: v.ID, State: string(v.State), Revision: v.Revision, Repository: v.Repository, Workflow: v.Workflow, RunID: v.RunID, JobNumber: v.JobID, Attempt: v.Attempt, Labels: append([]string(nil), v.Labels...), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: timestamp(v.ExpiresAt), GSI1PK: "job#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityJob, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
+	return item{PK: "job#" + v.ID, SK: metaSK, Entity: entityJob, ID: v.ID, State: string(v.State), Revision: v.Revision, Repository: v.Repository, Workflow: v.Workflow, RunID: v.RunID, JobNumber: v.JobID, Attempt: v.Attempt, Labels: append([]string(nil), v.Labels...), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: expiryUnix(v.ExpiresAt), GSI1PK: "job#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityJob, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
 }
 func runnerItem(v state.Runner) (item, error) {
 	if err := validateID(v.ID); err != nil {
@@ -307,7 +322,7 @@ func runnerItem(v state.Runner) (item, error) {
 	if err != nil {
 		return item{}, err
 	}
-	return item{PK: "runner#" + v.ID, SK: metaSK, Entity: entityRunner, ID: v.ID, JobID: v.JobID, LeaseID: v.LeaseID, Provider: v.Provider, ProviderInstance: v.ProviderInstanceID, CapacityPool: v.CapacityPoolID, CPU: v.CPU, MemoryGB: v.MemoryGB, GPU: v.GPU, Region: v.Region, Labels: append([]string(nil), v.Labels...), State: string(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: timestamp(v.ExpiresAt), Revision: v.Revision, GSI1PK: "runner#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityRunner, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
+	return item{PK: "runner#" + v.ID, SK: metaSK, Entity: entityRunner, ID: v.ID, JobID: v.JobID, LeaseID: v.LeaseID, Provider: v.Provider, ProviderInstance: v.ProviderInstanceID, CapacityPool: v.CapacityPoolID, CPU: v.CPU, MemoryGB: v.MemoryGB, GPU: v.GPU, Region: v.Region, Labels: append([]string(nil), v.Labels...), State: string(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: expiryUnix(v.ExpiresAt), Revision: v.Revision, GSI1PK: "runner#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityRunner, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
 }
 func leaseItem(v state.Lease) (item, error) {
 	if err := validateID(v.ID); err != nil {
@@ -317,7 +332,7 @@ func leaseItem(v state.Lease) (item, error) {
 	if err != nil {
 		return item{}, err
 	}
-	return item{PK: "lease#" + v.ID, SK: metaSK, Entity: entityLease, ID: v.ID, JobID: v.JobID, RunnerID: v.RunnerID, State: string(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: timestamp(v.ExpiresAt), Revision: v.Revision, GSI1PK: "lease#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityLease, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
+	return item{PK: "lease#" + v.ID, SK: metaSK, Entity: entityLease, ID: v.ID, JobID: v.JobID, RunnerID: v.RunnerID, State: string(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: expiryUnix(v.ExpiresAt), Revision: v.Revision, GSI1PK: "lease#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityLease, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
 }
 
 func (v item) job() (state.Job, error) {
@@ -329,10 +344,7 @@ func (v item) job() (state.Job, error) {
 	if err != nil {
 		return state.Job{}, err
 	}
-	expires, err := parseTimestamp(v.ExpiresAt)
-	if err != nil {
-		return state.Job{}, err
-	}
+	expires := unixTime(v.ExpiresAt)
 	return state.Job{ID: v.ID, Repository: v.Repository, Workflow: v.Workflow, RunID: v.RunID, JobID: v.JobNumber, Attempt: v.Attempt, Labels: append([]string(nil), v.Labels...), State: state.JobState(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: created, UpdatedAt: updated, ExpiresAt: expires, Revision: v.Revision}, nil
 }
 func (v item) runner() (state.Runner, error) {
@@ -344,10 +356,7 @@ func (v item) runner() (state.Runner, error) {
 	if err != nil {
 		return state.Runner{}, err
 	}
-	expires, err := parseTimestamp(v.ExpiresAt)
-	if err != nil {
-		return state.Runner{}, err
-	}
+	expires := unixTime(v.ExpiresAt)
 	return state.Runner{ID: v.ID, JobID: v.JobID, LeaseID: v.LeaseID, Provider: v.Provider, ProviderInstanceID: v.ProviderInstance, CapacityPoolID: v.CapacityPool, CPU: v.CPU, MemoryGB: v.MemoryGB, GPU: v.GPU, Region: v.Region, Labels: append([]string(nil), v.Labels...), State: state.RunnerState(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: created, UpdatedAt: updated, ExpiresAt: expires, Revision: v.Revision}, nil
 }
 func (v item) lease() (state.Lease, error) {
@@ -359,10 +368,7 @@ func (v item) lease() (state.Lease, error) {
 	if err != nil {
 		return state.Lease{}, err
 	}
-	expires, err := parseTimestamp(v.ExpiresAt)
-	if err != nil {
-		return state.Lease{}, err
-	}
+	expires := unixTime(v.ExpiresAt)
 	return state.Lease{ID: v.ID, JobID: v.JobID, RunnerID: v.RunnerID, State: state.LeaseState(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: created, UpdatedAt: updated, ExpiresAt: expires, Revision: v.Revision}, nil
 }
 

@@ -128,6 +128,7 @@ type Service struct {
 // AssignmentPolicy is the assignment-side counterpart to github.ScopePolicy.
 // It prevents a caller from bypassing webhook admission with a direct request.
 type AssignmentPolicy struct {
+	Organizations []string
 	Repositories  []string
 	AllowedLabels []string
 	RunnerGroupID int64
@@ -135,8 +136,8 @@ type AssignmentPolicy struct {
 }
 
 func (p AssignmentPolicy) validate(request AssignmentRequest, configuredGroupID *int64) error {
-	if len(p.Repositories) == 0 || len(p.AllowedLabels) == 0 {
-		return fmt.Errorf("%w: assignment repository and label allowlists are required", ErrInvalidRequest)
+	if len(p.Organizations) == 0 && len(p.Repositories) == 0 || len(p.AllowedLabels) == 0 {
+		return fmt.Errorf("%w: assignment organization/repository and label allowlists are required", ErrInvalidRequest)
 	}
 	if p.RunnerGroupID <= 0 || configuredGroupID == nil || *configuredGroupID != p.RunnerGroupID {
 		return fmt.Errorf("%w: configured runner group does not match the approved policy", ErrInvalidRequest)
@@ -144,7 +145,8 @@ func (p AssignmentPolicy) validate(request AssignmentRequest, configuredGroupID 
 	if request.IsFork && !p.AllowForks {
 		return ErrForkNotAllowed
 	}
-	if !containsFold(p.Repositories, request.Job.Repository) {
+	owner := strings.SplitN(request.Job.Repository, "/", 2)[0]
+	if !containsFold(p.Repositories, request.Job.Repository) && !containsFold(p.Organizations, owner) {
 		return fmt.Errorf("%w: repository %q is not approved", ErrInvalidRequest, request.Job.Repository)
 	}
 	for _, label := range request.Job.Labels {

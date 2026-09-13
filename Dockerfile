@@ -2,6 +2,9 @@
 
 FROM golang:1.27.1-alpine AS build
 
+ARG TARGETOS=linux
+ARG TARGETARCH
+
 WORKDIR /src/controller
 
 # Keep dependency downloads in a separate layer when source files change.
@@ -9,7 +12,7 @@ COPY controller/go.mod controller/go.sum ./
 RUN go mod download
 
 COPY controller/ ./
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/runner-controller ./cmd/runner-controller
 
 FROM alpine:3.22 AS runtime

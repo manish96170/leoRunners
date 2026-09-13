@@ -132,7 +132,7 @@ func (p *Provider) Provision(ctx context.Context, spec providers.RunnerSpec) (pr
 	if err := contextErr(ctx); err != nil {
 		return providers.RunnerInstance{}, err
 	}
-	runnerID, err := p.newID()
+	runnerID, err := stableRunnerID(spec, p.newID)
 	if err != nil {
 		return providers.RunnerInstance{}, fmt.Errorf("create runner ID: %w", err)
 	}
@@ -181,6 +181,14 @@ func (p *Provider) Provision(ctx context.Context, spec providers.RunnerSpec) (pr
 	created := p.now().UTC()
 	// The JIT value is deliberately not retained in the provider-owned copy.
 	return providers.RunnerInstance{ID: runnerID, ProviderID: instanceID, Provider: "aws", Status: providers.StatusProvisioning, CreatedAt: created, ExpiresAt: spec.ExpiresAt, Spec: cloneSpecWithoutSecrets(spec)}, nil
+}
+
+func stableRunnerID(spec providers.RunnerSpec, fallback func() (string, error)) (string, error) {
+	if key := strings.TrimSpace(spec.Metadata[MetadataProviderAttemptKey]); key != "" {
+		digest := sha256.Sum256([]byte("leo-runners/runner-id/" + key))
+		return "runner-" + hex.EncodeToString(digest[:])[:32], nil
+	}
+	return fallback()
 }
 
 func providerClientToken(spec providers.RunnerSpec) (string, error) {
@@ -232,6 +240,9 @@ func (p *Provider) WaitReady(ctx context.Context, instance providers.RunnerInsta
 	for {
 		status, err := p.Status(waitCtx, instance)
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return fmt.Errorf("%w: %v", ErrNotReady, err)
+			}
 			return err
 		}
 		switch status {

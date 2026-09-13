@@ -20,16 +20,23 @@ type Service struct {
 	Lifecycle        *lifecycle.Manager
 	Assignment       runners.AssignmentService
 	Provider         providers.Provider
+	Providers        map[string]providers.Provider
 	Sink             telemetry.Sink
 	JobTTL           time.Duration
 	RunnerGroupID    *int64
 	RunnerNamePrefix string
 	CapacityRegistry *capacity.Registry
+	ScopePolicy      *github.ScopePolicy
 }
 
 func (s *Service) HandleWorkflowJob(ctx context.Context, event github.WorkflowJobEvent) (err error) {
 	if s.State == nil || s.Lifecycle == nil || (s.Scheduler == nil && s.Assignment == nil) {
 		return fmt.Errorf("controller dependencies are not configured")
+	}
+	if s.ScopePolicy != nil {
+		if err := s.ScopePolicy.ValidateEvent(event); err != nil {
+			return err
+		}
 	}
 	inserted, err := s.State.InsertLifecycleEvent(ctx, state.LifecycleEvent{ID: event.EventID, IdempotencyKey: event.DedupKey, Type: string(event.Action), JobID: event.JobKey, OccurredAt: event.ReceivedAt})
 	if err != nil {
@@ -82,7 +89,7 @@ func (s *Service) HandleWorkflowJob(ctx context.Context, event github.WorkflowJo
 					return err
 				}
 			}
-			assignment, assignmentErr := s.Assignment.Assign(ctx, runners.AssignmentRequest{Job: job, Spec: spec, Provider: assignmentProvider, CapacityPoolID: poolID})
+			assignment, assignmentErr := s.Assignment.Assign(ctx, runners.AssignmentRequest{Job: job, Spec: spec, Provider: assignmentProvider, CapacityPoolID: poolID, IsFork: event.Job.Repository.IsFork})
 			if assignmentErr != nil && poolID != "" {
 				_ = s.Scheduler.PoolRegistry.Release(poolID, spec.CPU, spec.MemoryGB, boolInt(spec.GPU))
 			}
@@ -147,7 +154,15 @@ func (s *Service) finish(ctx context.Context, jobID string, final state.JobState
 	if err != nil {
 		return err
 	}
-	if err := s.Provider.Terminate(ctx, providers.RunnerInstance{ID: runner.ID, ProviderID: runner.ProviderInstanceID, Provider: runner.Provider}); err != nil {
+	provider := s.Provider
+	if s.Providers != nil {
+		var ok bool
+		provider, ok = s.Providers[runner.Provider]
+		if !ok || provider == nil {
+			return fmt.Errorf("provider %q is not configured for runner cleanup", runner.Provider)
+		}
+	}
+	if err := provider.Terminate(ctx, providers.RunnerInstance{ID: runner.ID, ProviderID: runner.ProviderInstanceID, Provider: runner.Provider}); err != nil {
 		return err
 	}
 	if s.Scheduler != nil {

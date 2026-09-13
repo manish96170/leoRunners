@@ -22,6 +22,7 @@ func main() {
 	if *networkEnabled {
 		fail("network-enabled mode is refused")
 	}
+	fail("host execution is refused; invoke this runner only through an external sandbox implementation")
 	repo, err := filepath.Abs(*repository)
 	if err != nil {
 		fail(err.Error())

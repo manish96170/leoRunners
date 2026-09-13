@@ -534,11 +534,11 @@ evidence_report() {
         "$evidence_run_id" "$evidence_repository" "$evidence_workflow" "$evidence_provider_name" "$evidence_region" \
         "$validation_started_at" "$validation_finished_at" "$evidence_duration_ms"
     printf '    "lifecycle": ['
-    printf '{"name":"queued","status":"observed","observed_at":"%s","duration_ms":0},' "$validation_started_at"
+    printf '{"name":"queued","status":"skipped","observed_at":"%s","duration_ms":0},' "$validation_started_at"
     printf '{"name":"provisioning","status":"observed","observed_at":"%s","duration_ms":0},' "$validation_started_at"
-    printf '{"name":"ready","status":"observed","observed_at":"%s","duration_ms":0},' "$validation_started_at"
-    printf '{"name":"running","status":"observed","observed_at":"%s","duration_ms":0},' "$validation_started_at"
-    printf '{"name":"completed","status":"observed","observed_at":"%s","duration_ms":0},' "$validation_finished_at"
+    printf '{"name":"ready","status":"skipped","observed_at":"%s","duration_ms":0},' "$validation_started_at"
+    printf '{"name":"running","status":"skipped","observed_at":"%s","duration_ms":0},' "$validation_started_at"
+    printf '{"name":"completed","status":"skipped","observed_at":"%s","duration_ms":0},' "$validation_finished_at"
     printf '{"name":"cleanup_started","status":"observed","observed_at":"%s","duration_ms":0},' "$cleanup_started_at"
     printf '{"name":"cleanup_completed","status":"observed","observed_at":"%s","duration_ms":0}' "$cleanup_completed_at"
     printf '],\n'
@@ -795,7 +795,6 @@ run_gcp_live() {
         --source-instance-template "$template" \
         --labels purpose=leo-cloud-validation,ephemeral=true --quiet \
         --request-timeout "$gcp_operation_timeout_seconds" >/dev/null 2>&1 || {
-        gcp_instance_name=
         printf '%s\n' 'live GCP validation VM creation failed' >&2
         return 1
     }
@@ -893,6 +892,23 @@ fi
     write_preflight_report || true
     exit 2
 }
+[ -n "$scope_file" ] && [ "$scope_status" = pass ] || {
+    printf '%s\n' 'live validation requires a reviewed scope file; no resources were touched' >&2
+    exit_class=invocation-error
+    write_preflight_report || true
+    exit 2
+}
+case "$live_action" in
+    aws-ec2)
+        [ -n "$scope_aws_account" ] && [ -n "$scope_aws_region" ] || { printf '%s\n' 'AWS live validation requires aws_account_id and aws_region in the reviewed scope file' >&2; exit 2; }
+        ;;
+    gcp-vm)
+        [ -n "$scope_gcp_project" ] && [ -n "$scope_gcp_zone" ] || { printf '%s\n' 'GCP live validation requires gcp_project and gcp_zone in the reviewed scope file' >&2; exit 2; }
+        ;;
+    github-jit)
+        [ -n "$scope_github_repository" ] || { printf '%s\n' 'GitHub live validation requires github_repository in the reviewed scope file' >&2; exit 2; }
+        ;;
+esac
 [ "$live_action" != none ] || {
     printf '%s\n' 'live validation requires an explicit --live-action; no resources were touched' >&2
     exit_class=invocation-error

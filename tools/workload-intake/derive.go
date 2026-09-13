@@ -77,6 +77,9 @@ func Derive(repo, commit string, limits Limits) (Report, error) {
 		if secretContent.MatchString(text) {
 			return Report{}, fmt.Errorf("secret-shaped content rejected in %s", path)
 		}
+		if workflowCommand.MatchString(text) && regexp.MustCompile(`(?m)^[ \t]*(?:run|command):[ \t]*\|`).MatchString(text) {
+			return Report{}, fmt.Errorf("multiline workflow commands require explicit parser support in %s", path)
+		}
 		capability := ruleFor(path)
 		if capability == "github-actions" {
 			workflow = path

@@ -112,7 +112,7 @@ func TestProvisionWaitsForOperationAndBuildsLabels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if instance.Provider != "gcp" || instance.ProviderID != "leo-runner-fixed" || instance.Status != providers.StatusProvisioning {
+	if instance.Provider != "gcp" || instance.ProviderID != "leo-runner-7d792130e24dc2b4d92ed31e2d2d5683" || instance.Status != providers.StatusProvisioning {
 		t.Fatalf("unexpected instance: %+v", instance)
 	}
 	if client.insertOperation.waits != 1 {
@@ -123,10 +123,10 @@ func TestProvisionWaitsForOperationAndBuildsLabels(t *testing.T) {
 		t.Fatalf("unexpected insert request: %+v", req)
 	}
 	resource := req.InstanceResource
-	if resource.GetName() != "leo-runner-fixed" || req.GetSourceInstanceTemplate() != testConfig().InstanceTemplate || req.GetRequestId() == "" {
+	if resource.GetName() != "leo-runner-7d792130e24dc2b4d92ed31e2d2d5683" || req.GetSourceInstanceTemplate() != testConfig().InstanceTemplate || req.GetRequestId() == "" {
 		t.Fatalf("unexpected resource: %+v", resource)
 	}
-	want := map[string]string{managedByLabel: "leo-runners", runnerLabel: "runner-fixed", repositoryLabel: "org-repo", workflowLabel: "build-test", runLabel: "42", jobLabel: "job-7", createdLabel: "t19700101t000140z", expiryLabel: "t19700101t000320z"}
+	want := map[string]string{managedByLabel: "leo-runners", runnerLabel: "runner-7d792130e24dc2b4d92ed31e2d2d5683", repositoryLabel: "org-repo", workflowLabel: "build-test", runLabel: "42", jobLabel: "job-7", createdLabel: "t19700101t000140z", expiryLabel: "t19700101t000320z"}
 	for key, value := range want {
 		if resource.Labels[key] != value {
 			t.Errorf("label %q = %q, want %q", key, resource.Labels[key], value)

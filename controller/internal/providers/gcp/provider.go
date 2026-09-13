@@ -49,6 +49,7 @@ type Config struct {
 	PollInterval     time.Duration
 	ReadyTimeout     time.Duration
 	OperationTimeout time.Duration
+	UserData         string
 }
 
 func (c Config) Validate() error {
@@ -151,7 +152,7 @@ func (p *Provider) Provision(ctx context.Context, spec providers.RunnerSpec) (pr
 	if err := contextErr(ctx); err != nil {
 		return providers.RunnerInstance{}, err
 	}
-	runnerID, err := p.newID()
+	runnerID, err := stableRunnerID(spec, p.newID)
 	if err != nil {
 		return providers.RunnerInstance{}, fmt.Errorf("create runner ID: %w", err)
 	}
@@ -168,7 +169,19 @@ func (p *Provider) Provision(ctx context.Context, spec providers.RunnerSpec) (pr
 	if err != nil {
 		return providers.RunnerInstance{}, err
 	}
-	req := &computepb.InsertInstanceRequest{Project: p.config.Project, Zone: p.config.Zone, RequestId: stringPtr(requestID), SourceInstanceTemplate: stringPtr(p.config.InstanceTemplate), InstanceResource: &computepb.Instance{Name: stringPtr(name), Labels: labels}}
+	resource := &computepb.Instance{Name: stringPtr(name), Labels: labels}
+	jitConfig := spec.Metadata["github_jit_config"]
+	if jitConfig != "" && p.config.UserData == "" {
+		return providers.RunnerInstance{}, fmt.Errorf("%w: JIT config requires startup-script user data", ErrInvalidConfig)
+	}
+	if p.config.UserData != "" {
+		startup, err := renderUserData(p.config.UserData, jitConfig)
+		if err != nil {
+			return providers.RunnerInstance{}, err
+		}
+		resource.Metadata = &computepb.Metadata{Items: []*computepb.Items{{Key: stringPtr("startup-script"), Value: stringPtr(startup)}}}
+	}
+	req := &computepb.InsertInstanceRequest{Project: p.config.Project, Zone: p.config.Zone, RequestId: stringPtr(requestID), SourceInstanceTemplate: stringPtr(p.config.InstanceTemplate), InstanceResource: resource}
 	opCtx, cancel := operationContext(ctx, p.config.OperationTimeout)
 	defer cancel()
 	op, err := p.client.Insert(opCtx, req)
@@ -185,12 +198,34 @@ func (p *Provider) Provision(ctx context.Context, spec providers.RunnerSpec) (pr
 	return providers.RunnerInstance{ID: runnerID, ProviderID: name, Provider: "gcp", Status: providers.StatusProvisioning, CreatedAt: created, ExpiresAt: spec.ExpiresAt, Spec: cloneSpec(spec)}, nil
 }
 
+func stableRunnerID(spec providers.RunnerSpec, fallback func() (string, error)) (string, error) {
+	if key := strings.TrimSpace(spec.Metadata[MetadataAttemptKey]); key != "" {
+		digest := sha256.Sum256([]byte("leo-runners/runner-id/" + key))
+		return "runner-" + hex.EncodeToString(digest[:])[:32], nil
+	}
+	return fallback()
+}
+
+func renderUserData(template, encodedJIT string) (string, error) {
+	if encodedJIT == "" {
+		return template, nil
+	}
+	const placeholder = "{{GITHUB_JIT_CONFIG_B64}}"
+	if strings.Count(template, placeholder) != 1 || strings.ContainsAny(encodedJIT, "'\r\n") {
+		return "", fmt.Errorf("%w: startup script must contain one safe JIT placeholder", ErrInvalidConfig)
+	}
+	return strings.Replace(template, placeholder, "'"+encodedJIT+"'", 1), nil
+}
+
 func (p *Provider) WaitReady(ctx context.Context, instance providers.RunnerInstance) error {
 	waitCtx, cancel := operationContext(ctx, p.config.ReadyTimeout)
 	defer cancel()
 	for {
 		status, err := p.Status(waitCtx, instance)
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return fmt.Errorf("%w: %v", ErrNotReady, err)
+			}
 			return err
 		}
 		if status == providers.StatusReady {

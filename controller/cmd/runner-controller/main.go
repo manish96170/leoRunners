@@ -76,6 +76,15 @@ func main() {
 	serviceSink := &telemetryFanout{sinks: sinks}
 	_ = metrics.IncCounter("controller_up", nil)
 	service := &controller.Service{State: repository, Provider: provider, Sink: serviceSink, JobTTL: 2 * time.Hour, RunnerNamePrefix: envOrDefault("RUNNER_NAME_PREFIX", "leo-runner"), CapacityRegistry: poolRegistry}
+	providerKey := envOrDefault("CAPACITY_PROVIDER", "fake")
+	if providerKey == "fake" {
+		if strings.TrimSpace(os.Getenv("AWS_LAUNCH_TEMPLATE_ID")) != "" || strings.TrimSpace(os.Getenv("AWS_LAUNCH_TEMPLATE_NAME")) != "" {
+			providerKey = "aws"
+		} else if strings.TrimSpace(os.Getenv("GCP_INSTANCE_TEMPLATE")) != "" {
+			providerKey = "gcp"
+		}
+	}
+	service.Providers = map[string]providers.Provider{providerKey: provider}
 	mode := policy.Mode(envOrDefault("SCHEDULER_MODE", string(policy.Fallback)))
 	poolID := envOrDefault("CAPACITY_POOL_ID", "configured")
 	service.Scheduler = &scheduler.Scheduler{State: repository, Mode: mode, PoolRegistry: poolRegistry, PoolProviders: map[string]providers.Provider{poolID: provider}}
@@ -105,13 +114,13 @@ func main() {
 			http.Error(w, "invalid event", http.StatusBadRequest)
 			return
 		}
-		go func(event github.WorkflowJobEvent) {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-			defer cancel()
-			if err := service.HandleWorkflowJob(ctx, event); err != nil {
-				log.Printf("workflow job %s failed: %v", event.JobKey, err)
-			}
-		}(event)
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
+		defer cancel()
+		if err := service.HandleWorkflowJob(ctx, event); err != nil {
+			log.Printf("workflow job %s failed: %v", event.JobKey, err)
+			http.Error(w, "workflow processing failed", http.StatusInternalServerError)
+			return
+		}
 		w.WriteHeader(http.StatusAccepted)
 	})
 	server := &http.Server{Addr: runtime.Server.ListenAddr, Handler: mux, ReadHeaderTimeout: runtime.Server.ReadHeaderTimeout}
@@ -214,13 +223,14 @@ func configureRepository() state.Repository {
 func configureProvider(repository state.Repository) providers.Provider {
 	region := envOrDefault("AWS_REGION", "us-east-1")
 	templateID := strings.TrimSpace(os.Getenv("AWS_LAUNCH_TEMPLATE_ID"))
-	if templateID == "" {
+	templateName := strings.TrimSpace(os.Getenv("AWS_LAUNCH_TEMPLATE_NAME"))
+	if templateID == "" && templateName == "" {
 		if gcpTemplate := strings.TrimSpace(os.Getenv("GCP_INSTANCE_TEMPLATE")); gcpTemplate != "" {
 			client, err := compute.NewInstancesRESTClient(context.Background())
 			if err != nil {
 				log.Fatal(err)
 			}
-			provider, err := gcpprovider.New(client, gcpprovider.Config{Project: os.Getenv("GCP_PROJECT"), Zone: os.Getenv("GCP_ZONE"), InstanceTemplate: gcpTemplate, NamePrefix: envOrDefault("GCP_NAME_PREFIX", "leo-runner")})
+			provider, err := gcpprovider.New(client, gcpprovider.Config{Project: os.Getenv("GCP_PROJECT"), Zone: os.Getenv("GCP_ZONE"), InstanceTemplate: gcpTemplate, NamePrefix: envOrDefault("GCP_NAME_PREFIX", "leo-runner"), UserData: os.Getenv("RUNNER_USER_DATA")})
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -240,7 +250,7 @@ func configureProvider(repository state.Repository) providers.Provider {
 		}
 		userData = string(raw)
 	}
-	provider, err := awsprovider.New(ec2.NewFromConfig(cfg), awsprovider.Config{Region: region, LaunchTemplateID: templateID, LaunchTemplateVersion: os.Getenv("AWS_LAUNCH_TEMPLATE_VERSION"), SubnetID: os.Getenv("AWS_SUBNET_ID"), SecurityGroupIDs: splitCSV(os.Getenv("AWS_SECURITY_GROUP_IDS")), InstanceProfileARN: os.Getenv("AWS_RUNNER_INSTANCE_PROFILE_ARN"), InstanceProfileName: os.Getenv("AWS_RUNNER_INSTANCE_PROFILE_NAME"), UserData: userData})
+	provider, err := awsprovider.New(ec2.NewFromConfig(cfg), awsprovider.Config{Region: region, LaunchTemplateID: templateID, LaunchTemplateName: templateName, LaunchTemplateVersion: os.Getenv("AWS_LAUNCH_TEMPLATE_VERSION"), SubnetID: os.Getenv("AWS_SUBNET_ID"), SecurityGroupIDs: splitCSV(os.Getenv("AWS_SECURITY_GROUP_IDS")), InstanceProfileARN: os.Getenv("AWS_RUNNER_INSTANCE_PROFILE_ARN"), InstanceProfileName: os.Getenv("AWS_RUNNER_INSTANCE_PROFILE_NAME"), UserData: userData})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -287,7 +297,12 @@ func configureGitHubAssignment(service *controller.Service, repository state.Rep
 	if err != nil {
 		log.Fatal(err)
 	}
-	service.Assignment = &runners.Service{State: repository, Provider: provider, JIT: controller.GitHubJITAdapter{Client: client}, Registration: controller.GitHubRegistrationAdapter{Verifier: verifier}, RunnerGroupID: &groupID}
+	scope := github.ScopePolicy{Organizations: splitCSV(os.Getenv("GITHUB_ALLOWED_ORGANIZATIONS")), Repositories: splitCSV(os.Getenv("GITHUB_ALLOWED_REPOSITORIES")), AllowedLabels: splitCSV(os.Getenv("GITHUB_ALLOWED_LABELS")), AllowForks: strings.EqualFold(os.Getenv("GITHUB_ALLOW_FORKS"), "true")}
+	if err := scope.Validate(); err != nil {
+		log.Fatalf("GitHub scope policy is required when JIT is enabled: %v", err)
+	}
+	service.ScopePolicy = &scope
+	service.Assignment = &runners.Service{State: repository, Provider: provider, JIT: controller.GitHubJITAdapter{Client: client}, Registration: controller.GitHubRegistrationAdapter{Verifier: verifier}, RunnerGroupID: &groupID, Policy: runners.AssignmentPolicy{Organizations: append([]string(nil), scope.Organizations...), Repositories: append([]string(nil), scope.Repositories...), AllowedLabels: append([]string(nil), scope.AllowedLabels...), RunnerGroupID: groupID, AllowForks: scope.AllowForks}}
 }
 
 func envOrDefault(name, fallback string) string {
