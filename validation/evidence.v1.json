@@ -1,0 +1,38 @@
+{
+  "apiVersion": "validation.leorunners.io/v1",
+  "kind": "ControlledValidationEvidence",
+  "metadata": { "name": "aws-ephemeral-run", "version": "1.0.0" },
+  "spec": {
+    "run": {
+      "run_id": "run-20260913-001",
+      "repository": "manish96170/leoRunners",
+      "workflow": "controlled-live-validation",
+      "provider": "aws",
+      "region": "ap-south-1",
+      "started_at": "2026-09-13T08:00:00Z",
+      "finished_at": "2026-09-13T08:12:00Z",
+      "duration_ms": 720000
+    },
+    "lifecycle": [
+      { "name": "queued", "status": "observed", "observed_at": "2026-09-13T08:00:00Z", "duration_ms": 1200 },
+      { "name": "provisioning", "status": "observed", "observed_at": "2026-09-13T08:00:03Z", "duration_ms": 180000 },
+      { "name": "ready", "status": "observed", "observed_at": "2026-09-13T08:03:03Z", "duration_ms": 9000 },
+      { "name": "running", "status": "observed", "observed_at": "2026-09-13T08:04:00Z", "duration_ms": 420000 },
+      { "name": "completed", "status": "observed", "observed_at": "2026-09-13T08:11:00Z", "duration_ms": 0 },
+      { "name": "cleanup_started", "status": "observed", "observed_at": "2026-09-13T08:11:01Z", "duration_ms": 50000 },
+      { "name": "cleanup_completed", "status": "observed", "observed_at": "2026-09-13T08:12:00Z", "duration_ms": 0 }
+    ],
+    "cleanup": {
+      "attempted": true,
+      "completed": true,
+      "resource_refs": ["aws:ec2:ap-south-1:instance/i-0123456789abcdef0"],
+      "verified_at": "2026-09-13T08:12:02Z"
+    },
+    "evidence": {
+      "metrics": [{ "ref": "cloudwatch://LeoRunners/runner.lifecycle.duration_ms?p99", "captured_at": "2026-09-13T08:12:10Z" }],
+      "logs": [{ "ref": "cloudwatch://log-group/leo-runners-controller/stream/run-20260913-001", "captured_at": "2026-09-13T08:12:11Z" }],
+      "alarms": [{ "ref": "cloudwatch://alarm/leo-runners-cleanup-failures", "captured_at": "2026-09-13T08:12:12Z" }],
+      "dashboards": [{ "ref": "cloudwatch://dashboard/leo-runners-operations", "captured_at": "2026-09-13T08:12:13Z" }]
+    }
+  }
+}

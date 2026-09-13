@@ -22,6 +22,44 @@ func TestLoadFromUsesSafeDefaults(t *testing.T) {
 	if c.Reconciliation.Interval != 30*time.Second || c.AI.Enabled {
 		t.Fatalf("unexpected timing or AI defaults: %+v", c)
 	}
+	if c.Extensions.Enabled || c.Extensions.QueueSize != 32 || c.Extensions.Timeout != 2*time.Second || c.Extensions.ReportBuffer != 64 {
+		t.Fatalf("unexpected extension defaults: %+v", c.Extensions)
+	}
+}
+
+func TestLoadFromParsesExplicitExtensionPolicy(t *testing.T) {
+	env := validEnv()
+	env["EXTENSIONS_ENABLED"] = "true"
+	env["EXTENSIONS_TENANT_ALLOWLIST"] = "tenant-a, tenant-b"
+	env["EXTENSIONS_QUEUE_SIZE"] = "128"
+	env["EXTENSIONS_TIMEOUT"] = "1500ms"
+	env["EXTENSIONS_REPORT_BUFFER"] = "256"
+	c, err := LoadFrom(env)
+	if err != nil {
+		t.Fatalf("LoadFrom() error = %v", err)
+	}
+	if !c.Extensions.Enabled || len(c.Extensions.TenantAllowlist) != 2 || c.Extensions.QueueSize != 128 || c.Extensions.Timeout != 1500*time.Millisecond || c.Extensions.ReportBuffer != 256 {
+		t.Fatalf("extension config = %+v", c.Extensions)
+	}
+}
+
+func TestValidateRejectsUnsafeExtensionTenantPolicyAndBounds(t *testing.T) {
+	tests := []ExtensionsConfig{
+		{Enabled: true, QueueSize: 1, Timeout: time.Second, ReportBuffer: 1},
+		{Enabled: true, TenantAllowlist: []string{"*"}, QueueSize: 1, Timeout: time.Second, ReportBuffer: 1},
+		{TenantAllowlist: []string{"tenant-a", "tenant-a"}, QueueSize: 1, Timeout: time.Second, ReportBuffer: 1},
+		{QueueSize: 4097, Timeout: time.Second, ReportBuffer: 1},
+		{QueueSize: 1, Timeout: 6 * time.Minute, ReportBuffer: 1},
+		{QueueSize: 1, Timeout: time.Second, ReportBuffer: 4097},
+	}
+	for i, extensionConfig := range tests {
+		c := Defaults()
+		c.Webhook.Secret = "secret"
+		c.Extensions = extensionConfig
+		if err := c.Validate(); !errors.Is(err, ErrInvalid) {
+			t.Errorf("case %d error = %v, want ErrInvalid", i, err)
+		}
+	}
 }
 
 func TestLoadFromRejectsMalformedValues(t *testing.T) {

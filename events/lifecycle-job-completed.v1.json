@@ -1,0 +1,14 @@
+{
+  "apiVersion": "events.leorunners.io/v1",
+  "kind": "LifecycleEvent",
+  "eventId": "evt-job-completed-001",
+  "eventType": "job.completed",
+  "occurredAt": "2026-09-13T10:05:41Z",
+  "sequence": 3,
+  "source": {"component": "controller", "version": "phase-20-v1"},
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-1001", "runnerId": "runner-501", "repository": "manish96170/leoRunners", "runId": "run-77"},
+  "delivery": {"deduplicationKey": "github:delivery-002", "replayKey": "job-1001:3", "attempt": 1, "causationId": "evt-runner-ready-001"},
+  "retention": {"expiresAt": "2026-10-13T10:05:41Z", "redacted": true, "evidenceClass": "operational"},
+  "data": {"status": "completed", "durationMs": 269000, "exitCode": 0, "extensions": {"result_source": "github"}}
+}
+

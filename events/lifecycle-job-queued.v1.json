@@ -1,0 +1,14 @@
+{
+  "apiVersion": "events.leorunners.io/v1",
+  "kind": "LifecycleEvent",
+  "eventId": "evt-job-queued-001",
+  "eventType": "job.queued",
+  "occurredAt": "2026-09-13T10:00:00Z",
+  "sequence": 1,
+  "source": {"component": "github", "version": "webhook-v1"},
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-1001", "repository": "manish96170/leoRunners", "runId": "run-77"},
+  "delivery": {"deduplicationKey": "github:delivery-001", "replayKey": "job-1001:1", "attempt": 1},
+  "retention": {"expiresAt": "2026-10-13T10:00:00Z", "redacted": true, "evidenceClass": "metadata"},
+  "data": {"status": "queued", "labels": ["self-hosted", "linux", "x64"], "extensions": {"github_action": "queued"}}
+}
+

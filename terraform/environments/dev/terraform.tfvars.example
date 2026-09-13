@@ -12,6 +12,16 @@ controller_generated_policy_json = file("/absolute/path/to/reviewed-controller-p
 enable_point_in_time_recovery = true
 enable_deletion_protection    = true
 enable_runner_ssm             = false
+enable_observability          = false
+
+# Optional. Set enable_observability = true only after reviewing CloudWatch
+# retention, dimensions, thresholds, and external notification ARNs.
+observability_name               = "leo-runners-dev-controller"
+observability_namespace          = "LeoRunners/Controller"
+observability_log_retention_days = 30
+observability_skip_destroy       = true
+# observability_kms_key_id       = "arn:aws:kms:us-east-1:123456789012:key/example"
+# observability_alarm_actions    = ["arn:aws:sns:us-east-1:123456789012:operations"]
 
 tags = {
   owner = "platform"

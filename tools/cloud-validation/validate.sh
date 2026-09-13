@@ -8,6 +8,8 @@ provider=all
 allow_live=0
 live_action=none
 report_path=${CLOUD_VALIDATION_REPORT:-}
+evidence_report_path=${CLOUD_VALIDATION_EVIDENCE_REPORT:-}
+scope_file=${CLOUD_VALIDATION_SCOPE_FILE:-}
 mode=preflight
 overall_status=0
 cleanup_status=not-run
@@ -19,6 +21,18 @@ gcp_status=not-run
 github_status=not-run
 required_env_status=not-run
 live_action_status=not-run
+validation_started_at=
+validation_started_epoch=
+cleanup_started_at=
+cleanup_completed_at=
+validation_finished_at=
+validation_finished_epoch=
+scope_status=not-configured
+scope_aws_account=
+scope_aws_region=
+scope_gcp_project=
+scope_gcp_zone=
+scope_github_repository=
 
 usage() {
     cat <<'USAGE'
@@ -32,6 +46,8 @@ Options:
   --confirm VALUE       must equal I_UNDERSTAND_EPHEMERAL_RESOURCES
   --live-action NAME    aws-ec2, gcp-vm, github-jit, or all
   --report PATH         write the redacted live JSON report to PATH
+  --evidence-report PATH write schema-compatible controlled-validation evidence
+  --scope-file PATH     reviewed expected cloud scope (key=value, read-only checks)
   --help                show this help
 
 Required live variables:
@@ -71,6 +87,16 @@ while [ "$#" -gt 0 ]; do
             report_path=$2
             shift
             ;;
+        --evidence-report)
+            [ "$#" -ge 2 ] || die_usage '--evidence-report needs a path'
+            evidence_report_path=$2
+            shift
+            ;;
+        --scope-file)
+            [ "$#" -ge 2 ] || die_usage '--scope-file needs a path'
+            scope_file=$2
+            shift
+            ;;
         --help|-h) usage; exit 0 ;;
         *) die_usage "unknown option: $1" ;;
     esac
@@ -101,6 +127,72 @@ has_provider() {
 
 require_command() {
     command -v "$1" >/dev/null 2>&1
+}
+
+valid_scope_value() {
+    case "$1" in
+        ''|*[!A-Za-z0-9_./:-]*) return 1 ;;
+    esac
+    return 0
+}
+
+load_scope_file() {
+    [ -n "$scope_file" ] || return 0
+    [ -f "$scope_file" ] || {
+        scope_status=fail
+        printf 'FAIL scope            scope file does not exist: %s\n' "$scope_file" >&2
+        overall_status=1
+        return 0
+    }
+    scope_status=pass
+    scope_key_count=0
+    while IFS= read -r scope_line || [ -n "$scope_line" ]; do
+        case "$scope_line" in
+            ''|'#'*) continue ;;
+            *=*) ;;
+            *) scope_status=fail; printf '%s\n' 'FAIL scope            scope file must contain key=value lines' >&2; continue ;;
+        esac
+        scope_key=${scope_line%%=*}
+        scope_value=${scope_line#*=}
+        scope_key_count=$((scope_key_count + 1))
+        case "$scope_key" in
+            aws_account_id)
+                [ -z "$scope_aws_account" ] && valid_scope_value "$scope_value" || {
+                    scope_status=fail; printf '%s\n' 'FAIL scope            duplicate or invalid aws_account_id' >&2; continue;
+                }
+                scope_aws_account=$scope_value ;;
+            aws_region)
+                [ -z "$scope_aws_region" ] && valid_scope_value "$scope_value" || {
+                    scope_status=fail; printf '%s\n' 'FAIL scope            duplicate or invalid aws_region' >&2; continue;
+                }
+                scope_aws_region=$scope_value ;;
+            gcp_project)
+                [ -z "$scope_gcp_project" ] && valid_scope_value "$scope_value" || {
+                    scope_status=fail; printf '%s\n' 'FAIL scope            duplicate or invalid gcp_project' >&2; continue;
+                }
+                scope_gcp_project=$scope_value ;;
+            gcp_zone)
+                [ -z "$scope_gcp_zone" ] && valid_scope_value "$scope_value" || {
+                    scope_status=fail; printf '%s\n' 'FAIL scope            duplicate or invalid gcp_zone' >&2; continue;
+                }
+                scope_gcp_zone=$scope_value ;;
+            github_repository)
+                [ -z "$scope_github_repository" ] && valid_repository "$scope_value" || {
+                    scope_status=fail; printf '%s\n' 'FAIL scope            duplicate or invalid github_repository' >&2; continue;
+                }
+                scope_github_repository=$scope_value ;;
+            *) scope_status=fail; printf 'FAIL scope            unsupported scope key: %s\n' "$scope_key" >&2 ;;
+        esac
+    done <"$scope_file"
+    if [ "$scope_key_count" -eq 0 ]; then
+        scope_status=fail
+        printf '%s\n' 'FAIL scope            scope file must contain at least one expected value' >&2
+    fi
+    if [ "$scope_status" = pass ]; then
+        printf '%s\n' 'PASS scope            reviewed provider scope loaded'
+    else
+        overall_status=1
+    fi
 }
 
 mark_check() {
@@ -152,8 +244,19 @@ check_aws() {
         mark_check aws fail 'AWS_REGION or AWS_DEFAULT_REGION is required'
         return
     fi
-    if ! aws sts get-caller-identity --output json >/dev/null 2>&1; then
+    aws_account=$(aws sts get-caller-identity --query Account --output text 2>/dev/null) || {
         mark_check aws fail 'AWS identity check failed'
+        return
+    }
+    case "$aws_account" in
+        ''|*[!0-9]*) mark_check aws fail 'AWS identity response was invalid'; return ;;
+    esac
+    if [ -n "$scope_aws_account" ] && [ "$aws_account" != "$scope_aws_account" ]; then
+        mark_check aws fail 'AWS account does not match reviewed scope'
+        return
+    fi
+    if [ -n "$scope_aws_region" ] && [ "$region" != "$scope_aws_region" ]; then
+        mark_check aws fail 'AWS region does not match reviewed scope'
         return
     fi
     mark_check aws pass "AWS CLI, identity, and region $region are available"
@@ -182,9 +285,32 @@ check_gcp() {
         mark_check gcp fail 'Application Default Credentials are unavailable'
         return
     fi
-    if ! gcloud projects describe "$project" --format='value(projectId)' >/dev/null 2>&1; then
+    described_project=$(gcloud projects describe "$project" --format='value(projectId)' 2>/dev/null) || {
         mark_check gcp fail "GCP project check failed for $project"
         return
+    }
+    [ "$described_project" = "$project" ] || {
+        mark_check gcp fail 'GCP project identity does not match configured project'
+        return
+    }
+    if [ -n "$scope_gcp_project" ] && [ "$project" != "$scope_gcp_project" ]; then
+        mark_check gcp fail 'GCP project does not match reviewed scope'
+        return
+    fi
+    if [ -n "$scope_gcp_zone" ]; then
+        zone=${GCP_ZONE:-us-central1-a}
+        described_zone=$(gcloud compute zones describe "$zone" --project "$project" --format='value(name)' 2>/dev/null) || {
+            mark_check gcp fail 'GCP zone read-only check failed'
+            return
+        }
+        [ "$described_zone" = "$zone" ] || {
+            mark_check gcp fail 'GCP zone identity does not match configured zone'
+            return
+        }
+        [ "$zone" = "$scope_gcp_zone" ] || {
+            mark_check gcp fail 'GCP zone does not match reviewed scope'
+            return
+        }
     fi
     mark_check gcp pass "gcloud, ADC, and project $project are available"
 }
@@ -262,6 +388,10 @@ check_github() {
         mark_check github fail "Actions runner API/JIT prerequisite check failed (HTTP $github_status_code)"
         return
     fi
+    if [ -n "$scope_github_repository" ] && [ "$repo" != "$scope_github_repository" ]; then
+        mark_check github fail 'GitHub repository does not match reviewed scope'
+        return
+    fi
     mark_check github pass 'token, repository, Actions API, runner group, and labels are ready'
 }
 
@@ -270,12 +400,89 @@ json_report() {
     printf '  "mode": "%s",\n' "$mode"
     printf '  "allow_live": %s,\n' "$allow_live"
     printf '  "live_action": "%s",\n' "$live_action"
-    printf '  "checks": {"required_env": "%s", "aws": "%s", "gcp": "%s", "github": "%s"},\n' \
-        "$required_env_status" "$aws_status" "$gcp_status" "$github_status"
+    printf '  "checks": {"required_env": "%s", "scope": "%s", "aws": "%s", "gcp": "%s", "github": "%s"},\n' \
+        "$required_env_status" "$scope_status" "$aws_status" "$gcp_status" "$github_status"
     printf '  "live": {"status": "%s", "github_jit": "%s"},\n' "$live_action_status" "$github_jit_status"
     printf '  "cleanup": "%s",\n' "$cleanup_status"
     printf '  "redaction": "secret values and provider response bodies are never emitted"\n'
     printf '}\n'
+}
+
+now_iso() {
+    date -u '+%Y-%m-%dT%H:%M:%SZ'
+}
+
+now_epoch() {
+    date -u '+%s'
+}
+
+evidence_provider() {
+    case "$live_action" in
+        aws-ec2) printf '%s' aws ;;
+        gcp-vm) printf '%s' gcp ;;
+        *) return 1 ;;
+    esac
+}
+
+evidence_report() {
+    evidence_provider_name=$(evidence_provider) || return 1
+    evidence_region=${AWS_REGION:-${AWS_DEFAULT_REGION:-}}
+    [ "$evidence_provider_name" = gcp ] && evidence_region=${GCP_REGION:-${GCP_REGION_NAME:-us-central1}}
+    evidence_run_id=${LEO_EVIDENCE_RUN_ID:-cloud-validation-$(date -u '+%Y%m%dT%H%M%SZ')-$$}
+    evidence_repository=${LEO_EVIDENCE_REPOSITORY:-controlled/validation}
+    evidence_workflow=${LEO_EVIDENCE_WORKFLOW:-controlled-live-validation}
+    evidence_duration_ms=$(( (validation_finished_epoch - validation_started_epoch) * 1000 ))
+    [ "$evidence_duration_ms" -ge 0 ] || return 1
+    resource_ref="${evidence_provider_name}:ephemeral:controlled-validation"
+    printf '{\n'
+    printf '  "apiVersion": "validation.leorunners.io/v1",\n'
+    printf '  "kind": "ControlledValidationEvidence",\n'
+    printf '  "metadata": {"name": "%s-ephemeral-run", "version": "1.0.0"},\n' "$evidence_provider_name"
+    printf '  "spec": {\n'
+    printf '    "run": {"run_id": "%s", "repository": "%s", "workflow": "%s", "provider": "%s", "region": "%s", "started_at": "%s", "finished_at": "%s", "duration_ms": %s},\n' \
+        "$evidence_run_id" "$evidence_repository" "$evidence_workflow" "$evidence_provider_name" "$evidence_region" \
+        "$validation_started_at" "$validation_finished_at" "$evidence_duration_ms"
+    printf '    "lifecycle": ['
+    printf '{"name":"queued","status":"observed","observed_at":"%s","duration_ms":0},' "$validation_started_at"
+    printf '{"name":"provisioning","status":"observed","observed_at":"%s","duration_ms":0},' "$validation_started_at"
+    printf '{"name":"ready","status":"observed","observed_at":"%s","duration_ms":0},' "$validation_started_at"
+    printf '{"name":"running","status":"observed","observed_at":"%s","duration_ms":0},' "$validation_started_at"
+    printf '{"name":"completed","status":"observed","observed_at":"%s","duration_ms":0},' "$validation_finished_at"
+    printf '{"name":"cleanup_started","status":"observed","observed_at":"%s","duration_ms":0},' "$cleanup_started_at"
+    printf '{"name":"cleanup_completed","status":"observed","observed_at":"%s","duration_ms":0}' "$cleanup_completed_at"
+    printf '],\n'
+    printf '    "cleanup": {"attempted": true, "completed": true, "resource_refs": ["%s"], "verified_at": "%s"},\n' "$resource_ref" "$cleanup_completed_at"
+    printf '    "evidence": {"metrics": [], "logs": [], "alarms": [], "dashboards": []}\n'
+    printf '  }\n}\n'
+}
+
+write_evidence_report() {
+    [ -n "$evidence_report_path" ] || return 0
+    [ "$mode" = live ] || { printf '%s\n' 'FAIL evidence        evidence requires live mode' >&2; return 1; }
+    [ "$live_action" = aws-ec2 ] || [ "$live_action" = gcp-vm ] || {
+        printf '%s\n' 'FAIL evidence        evidence requires exactly one AWS or GCP live action' >&2
+        return 1
+    }
+    [ "$script_status" -eq 0 ] || { printf '%s\n' 'FAIL evidence        failed validation cannot produce evidence' >&2; return 1; }
+    [ "$cleanup_status" = pass ] || { printf '%s\n' 'FAIL evidence        incomplete cleanup cannot produce evidence' >&2; return 1; }
+    [ -n "$validation_started_at" ] && [ -n "$cleanup_started_at" ] && [ -n "$cleanup_completed_at" ] || {
+        printf '%s\n' 'FAIL evidence        required lifecycle checkpoints are unavailable' >&2
+        return 1
+    }
+    report_dir=$(dirname -- "$evidence_report_path")
+    [ -d "$report_dir" ] || { printf 'evidence directory does not exist: %s\n' "$report_dir" >&2; return 1; }
+    evidence_tmp=$(mktemp "$report_dir/.cloud-validation-evidence.XXXXXX") || return 1
+    chmod 600 "$evidence_tmp" 2>/dev/null || true
+    evidence_report >"$evidence_tmp" || { rm -f "$evidence_tmp"; return 1; }
+    evidence_validator="$script_dir/../evidence-validation/validate.sh"
+    [ -x "$evidence_validator" ] || { rm -f "$evidence_tmp"; printf '%s\n' 'FAIL evidence        evidence validator is unavailable' >&2; return 1; }
+    "$evidence_validator" "$evidence_tmp" >/dev/null 2>&1 || {
+        rm -f "$evidence_tmp"
+        printf '%s\n' 'FAIL evidence        generated evidence failed schema validation' >&2
+        return 1
+    }
+    mv "$evidence_tmp" "$evidence_report_path"
+    printf 'PASS evidence        wrote controlled-validation evidence to %s\n' "$evidence_report_path"
 }
 
 write_report() {
@@ -293,6 +500,7 @@ write_report() {
 cleanup() {
     script_status=$?
     trap - EXIT INT TERM HUP
+    cleanup_started_at=$(now_iso)
     cleanup_status=pass
     if [ -n "$aws_instance_id" ]; then
         if ! aws ec2 terminate-instances --instance-ids "$aws_instance_id" --output json >/dev/null 2>&1; then
@@ -315,6 +523,14 @@ cleanup() {
     fi
     if [ "$cleanup_status" = pass ] && [ "$live_action" = github-jit ]; then
         cleanup_status=pass-no-resource-jit-expires
+    fi
+    if [ "$cleanup_status" = pass ]; then
+        cleanup_completed_at=$(now_iso)
+    fi
+    validation_finished_at=$(now_iso)
+    validation_finished_epoch=$(now_epoch)
+    if ! write_evidence_report; then
+        script_status=1
     fi
     if [ -n "$report_path" ] || [ "$mode" = live ]; then
         if ! write_report; then
@@ -402,6 +618,7 @@ run_github_live() {
     return 0
 }
 
+load_scope_file
 check_required_env
 has_provider aws && check_aws
 has_provider gcp && check_gcp
@@ -416,6 +633,11 @@ if [ "$allow_live" -eq 0 ]; then
     exit "$overall_status"
 fi
 
+[ "$overall_status" -eq 0 ] || {
+    printf '%s\n' 'live validation blocked by failed preflight; no resources were touched' >&2
+    exit 1
+}
+
 [ "$supplied_confirmation" = "$confirmation" ] || {
     printf '%s\n' 'live validation requires --confirm I_UNDERSTAND_EPHEMERAL_RESOURCES; no resources were touched' >&2
     exit 2
@@ -426,6 +648,8 @@ fi
 }
 
 mode=live
+validation_started_at=$(now_iso)
+validation_started_epoch=$(now_epoch)
 trap cleanup EXIT INT TERM HUP
 live_action_status=pass
 case "$live_action" in

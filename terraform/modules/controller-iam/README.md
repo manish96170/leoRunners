@@ -81,6 +81,18 @@ module "controller_iam" {
 The example assumes `aws_iam_policy.controller_runtime` is generated and
 reviewed elsewhere. This module does not create that policy.
 
+Before attaching a generated policy, run the offline contract checks from the
+repository root:
+
+```text
+./tools/iam-validation/validate.sh /path/to/generated-policy.json /path/to/reviewed-contract.json
+```
+
+The checker is review-only. A passing result does not upload, simulate through
+AWS, apply Terraform, or replace human IAM review. Keep the policy and its
+contract together as review evidence, and reject the change if either file is
+modified after validation.
+
 ## Validation
 
 Run `./validate.sh` from this directory. If Terraform is installed, the

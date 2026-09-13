@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leorunners.invalid/schemas/extensions-runtime-policy.v1.json",
+  "title": "Leo Runners extension runtime policy v1",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "extensions.leorunners.io/v1"},
+    "kind": {"const": "ExtensionRuntimePolicy"},
+    "metadata": {"type": "object", "required": ["name", "version"]},
+    "spec": {"type": "object", "required": ["global", "consumers"]}
+  },
+  "additionalProperties": false
+}

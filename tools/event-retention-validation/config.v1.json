@@ -1,0 +1,16 @@
+{
+  "apiVersion": "events.leorunners.io/v1",
+  "kind": "EventArchiveRetention",
+  "metadata": {"name": "controller-events", "version": "1.0.0"},
+  "spec": {
+    "enabled": true,
+    "path": "/var/lib/leo-runners/events.jsonl",
+    "file_mode": "0600",
+    "owner_only": true,
+    "restart_behavior": "reopen_append",
+    "max_line_bytes": 1048576,
+    "max_bytes": 1073741824,
+    "max_files": 7,
+    "max_age_seconds": 604800
+  }
+}

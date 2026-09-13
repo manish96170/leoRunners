@@ -91,6 +91,16 @@ func TestConfigValidation(t *testing.T) {
 	if _, err := New(client, Config{Bucket: "ab"}); !errors.Is(err, ErrInvalidConfig) {
 		t.Errorf("short bucket error = %v", err)
 	}
+	for _, prefix := range []string{"Unsafe", "cache..v1", "cache//v1", "cache/v1/", strings.Repeat("x", 257), "cache v1"} {
+		if err := ValidateNamespace(prefix); err == nil {
+			t.Errorf("unsafe namespace accepted: %q", prefix)
+		}
+	}
+	for _, prefix := range []string{"immutable/v1", "tenant-a/go_modules", "cache_v2"} {
+		if err := ValidateNamespace(prefix); err != nil {
+			t.Errorf("valid namespace rejected: %q: %v", prefix, err)
+		}
+	}
 }
 
 func TestPutUsesContentAddressedKeyMetadataAndEncryption(t *testing.T) {

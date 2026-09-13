@@ -42,6 +42,7 @@ type Config struct {
 	Capacity       CapacityConfig
 	GitHubJIT      GitHubJITConfig
 	AI             AIConfig
+	Extensions     ExtensionsConfig
 }
 
 type ServerConfig struct {
@@ -127,6 +128,49 @@ type AIConfig struct {
 	ConsentApproved bool
 }
 
+// ExtensionsConfig controls the optional, read-only extension runtime. An
+// enabled runtime must name every tenant it may observe; there is no wildcard
+// tenant grant.
+type ExtensionsConfig struct {
+	Enabled         bool
+	TenantAllowlist []string
+	QueueSize       int
+	Timeout         time.Duration
+	ReportBuffer    int
+}
+
+func (c ExtensionsConfig) Validate() error {
+	var problems []string
+	if c.QueueSize <= 0 || c.QueueSize > 4096 {
+		problems = append(problems, "queue size must be between 1 and 4096")
+	}
+	if c.Timeout <= 0 || c.Timeout > 5*time.Minute {
+		problems = append(problems, "timeout must be between 1ns and 5m")
+	}
+	if c.ReportBuffer <= 0 || c.ReportBuffer > 4096 {
+		problems = append(problems, "report buffer must be between 1 and 4096")
+	}
+	seen := make(map[string]struct{}, len(c.TenantAllowlist))
+	for _, tenant := range c.TenantAllowlist {
+		tenant = strings.TrimSpace(tenant)
+		if tenant == "" || tenant == "*" || len(tenant) > 128 {
+			problems = append(problems, "tenant allowlist contains an invalid tenant")
+			continue
+		}
+		if _, exists := seen[tenant]; exists {
+			problems = append(problems, "tenant allowlist contains a duplicate tenant")
+		}
+		seen[tenant] = struct{}{}
+	}
+	if c.Enabled && len(seen) == 0 {
+		problems = append(problems, "tenant allowlist is required when extensions are enabled")
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("%w: extensions %s", ErrInvalid, strings.Join(problems, "; "))
+	}
+	return nil
+}
+
 func Defaults() Config {
 	return Config{
 		Server:         ServerConfig{ListenAddr: ":8080", ReadHeaderTimeout: 5 * time.Second, MaxBodyBytes: 2 << 20},
@@ -137,6 +181,7 @@ func Defaults() Config {
 		Capacity:       CapacityConfig{Mode: CapacityFallback, PoolID: "configured", Ownership: "managed", Provider: "fake", MaxRunners: 100, SecurityProfile: "isolated"},
 		GitHubJIT:      GitHubJITConfig{APIBaseURL: "https://api.github.com", RequestTimeout: 30 * time.Second, RegistrationTimeout: 10 * time.Minute, PollInterval: 5 * time.Second},
 		AI:             AIConfig{Provider: "disabled", Timeout: 5 * time.Second, MaxLogBytes: 64 * 1024},
+		Extensions:     ExtensionsConfig{QueueSize: 32, Timeout: 2 * time.Second, ReportBuffer: 64},
 	}
 }
 
@@ -261,6 +306,19 @@ func LoadFrom(env map[string]string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
+	if c.Extensions.Enabled, err = optionalBoolDefault(env, "EXTENSIONS_ENABLED", false); err != nil {
+		return c, err
+	}
+	c.Extensions.TenantAllowlist = csv(env["EXTENSIONS_TENANT_ALLOWLIST"])
+	if c.Extensions.QueueSize, err = optionalInt(env, "EXTENSIONS_QUEUE_SIZE", c.Extensions.QueueSize); err != nil {
+		return c, err
+	}
+	if c.Extensions.Timeout, err = optionalDuration(env, "EXTENSIONS_TIMEOUT", c.Extensions.Timeout); err != nil {
+		return c, err
+	}
+	if c.Extensions.ReportBuffer, err = optionalInt(env, "EXTENSIONS_REPORT_BUFFER", c.Extensions.ReportBuffer); err != nil {
+		return c, err
+	}
 	return c, c.Validate()
 }
 
@@ -371,6 +429,9 @@ func (c Config) Validate() error {
 	if c.AI.Timeout <= 0 || c.AI.MaxLogBytes <= 0 {
 		problems = append(problems, "AI limits must be positive")
 	}
+	if err := c.Extensions.Validate(); err != nil {
+		problems = append(problems, err.Error())
+	}
 	if len(problems) > 0 {
 		return fmt.Errorf("%w: %s", ErrInvalid, strings.Join(problems, "; "))
 	}
@@ -385,6 +446,7 @@ func (c Config) Diagnostics() map[string]string {
 		"jit_enabled": strconv.FormatBool(c.GitHubJIT.Enabled), "jit_token_set": strconv.FormatBool(c.GitHubJIT.InstallationToken != ""),
 		"webhook_secret_set": strconv.FormatBool(c.Webhook.Secret != ""), "ai_enabled": strconv.FormatBool(c.AI.Enabled),
 		"ai_provider": c.AI.Provider, "ai_api_key_set": strconv.FormatBool(c.AI.APIKey != ""),
+		"extensions_enabled": strconv.FormatBool(c.Extensions.Enabled), "extension_tenants": strconv.Itoa(len(c.Extensions.TenantAllowlist)),
 	}
 }
 

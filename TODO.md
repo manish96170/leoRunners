@@ -95,6 +95,43 @@
 - [x] Local credential, privilege, RBAC, and AI-default security scanner.
 - [x] Security policy fixtures and hardening documentation.
 - [ ] Scan built image and rendered manifests in deployment environment.
-- [ ] Configure production scraping, CloudWatch routing, alarms, and retention.
+- [x] Versioned CI event envelope with deterministic IDs and redaction.
+- [x] Bounded event bus with deduplication and backpressure metrics.
+- [x] Durable redacted JSONL archive with replay/filtering.
+- [ ] Production event sink, archive retention, and extension consumers.
+- [x] Versioned extension metadata/advisory fixtures and validator.
+- [x] Bounded extension registry/dispatcher with failure isolation.
+- [x] Deterministic advisory action policy and enablement checks.
+- [ ] Production extension consumers and failure alerting.
+- [x] CloudWatch log group, retention, optional KMS encryption, notification-only alarms, and dashboard module.
+- [x] Versioned low-cardinality observability alert fixtures and offline validator.
+- [x] Observability operations runbook with triage, missing-data, p99, escalation, rollback, and cleanup procedures.
+- [ ] Configure production scraping, CloudWatch routing, alarms, and retention in the target account.
+- [x] Read-only analytics, cache, cost, and security extension consumers.
+- [x] Runtime extension failure, timeout, panic, queue-drop, and report-drop metrics.
+- [x] Extension failure alert fixtures and notification-only validation.
+- [x] Extension operations runbook and rollback procedures.
+- [x] Typed extension runtime configuration and disabled-by-default startup behavior.
+- [x] Explicit tenant-scoped registration and advisory policy wiring.
+- [x] Runtime policy fixtures and offline validation for bounds and wildcards.
+- [x] Extension deployment guide and rollout/rollback procedures.
+- [ ] Register consumers for production tenants and validate tenant isolation in the target environment.
+- [x] Versioned controlled-validation evidence schema and redacted validator.
+- [x] Positive, secret, raw-payload, and missing-file evidence fixtures.
+- [x] Explicitly opt-in observability Terraform composition in dev environment.
+- [x] Controlled-validation evidence approval, cleanup, and rollback runbook.
+- [x] Guarded cloud-validation generation of schema-compatible evidence reports.
+- [x] Cloud/evidence integration tests rejecting failed or incomplete cleanup.
+- [x] Reviewed provider scope-file checks before live cloud mutations.
+- [x] Approved-scope schema, positive/unsafe fixtures, and offline validation.
+- [x] Preflight scope operations and mismatch/abort runbook.
+- [x] Tenant isolation validation across extension runtime paths.
+- [x] Event archive retention, rotation, and owner-only permission validation.
+- [x] Cache tenant/namespace telemetry and S3 namespace validation.
+- [x] Optional CloudWatch subscription routing and offline safety checks.
+- [x] Docker/Kubernetes security and rendered-manifest validation.
+- [x] IAM policy refinement and offline simulation checks.
+- [x] Multi-replica capacity fencing, takeover, and conservation tests.
+- [x] Read-only final release-validation gate and redacted report.
 - [ ] Run real read-only AWS/GCP/GitHub preflight.
 - [ ] Run one approved live validation and confirm cleanup.

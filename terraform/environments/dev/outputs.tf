@@ -23,6 +23,21 @@ output "runner_instance_profile_name" {
   value       = module.runner_runtime.instance_profile_name
 }
 
+output "observability_log_group_name" {
+  description = "Optional CloudWatch telemetry log group; null when observability is disabled."
+  value       = var.enable_observability ? module.observability[0].log_group_name : null
+}
+
+output "observability_alarm_arns" {
+  description = "Optional notification-only alarm ARNs; empty when observability is disabled."
+  value       = var.enable_observability ? module.observability[0].alarm_arns : {}
+}
+
+output "observability_dashboard_name" {
+  description = "Optional CloudWatch dashboard name; null when observability is disabled."
+  value       = var.enable_observability ? module.observability[0].dashboard_name : null
+}
+
 output "composition_scope" {
   description = "Resources deliberately excluded from this development composition."
   value = [
@@ -31,5 +46,6 @@ output "composition_scope" {
     "ami",
     "github-app",
     "backend-configuration",
+    "observability-unless-explicitly-enabled",
   ]
 }

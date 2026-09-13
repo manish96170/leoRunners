@@ -46,15 +46,15 @@ func (m *Memory) Get(ctx context.Context, key Key) (Entry, bool, error) {
 	m.mu.Unlock()
 
 	if m.config.Mode != ModeEnabled {
-		emit(m.config.Telemetry, Event{Type: EventMiss, Key: key, At: now, Mode: m.config.Mode, Reason: "cache_not_served"})
+		emit(m.config.Telemetry, Event{Type: EventMiss, Key: key, At: now, Mode: m.config.Mode, Reason: "cache_not_served", TenantID: m.config.TenantID, Namespace: m.config.Namespace})
 		return Entry{}, false, nil
 	}
 	if !ok {
-		emit(m.config.Telemetry, Event{Type: EventMiss, Key: key, At: now, Mode: m.config.Mode, Reason: "not_found_or_expired"})
+		emit(m.config.Telemetry, Event{Type: EventMiss, Key: key, At: now, Mode: m.config.Mode, Reason: "not_found_or_expired", TenantID: m.config.TenantID, Namespace: m.config.Namespace})
 		return Entry{}, false, nil
 	}
-	emit(m.config.Telemetry, Event{Type: EventHit, Key: key, At: now, Mode: m.config.Mode, Hit: true, Size: entry.Size})
-	emit(m.config.Telemetry, Event{Type: EventRestore, Key: key, At: now, Mode: m.config.Mode, Hit: true, Size: entry.Size})
+	emit(m.config.Telemetry, Event{Type: EventHit, Key: key, At: now, Mode: m.config.Mode, Hit: true, Size: entry.Size, TenantID: m.config.TenantID, Namespace: m.config.Namespace})
+	emit(m.config.Telemetry, Event{Type: EventRestore, Key: key, At: now, Mode: m.config.Mode, Hit: true, Size: entry.Size, TenantID: m.config.TenantID, Namespace: m.config.Namespace})
 	return entry, true, nil
 }
 
@@ -93,10 +93,10 @@ func (m *Memory) Put(ctx context.Context, key Key, value []byte, metadata Metada
 		}
 		m.entries[key] = cloneEntry(entry)
 		m.mu.Unlock()
-		emit(m.config.Telemetry, Event{Type: EventSave, Key: key, At: now, Mode: m.config.Mode, Size: entry.Size})
+		emit(m.config.Telemetry, Event{Type: EventSave, Key: key, At: now, Mode: m.config.Mode, Size: entry.Size, TenantID: m.config.TenantID, Namespace: m.config.Namespace})
 		return cloneEntry(entry), nil
 	}
-	emit(m.config.Telemetry, Event{Type: EventSave, Key: key, At: now, Mode: m.config.Mode, Size: entry.Size, Reason: "cache_not_written"})
+	emit(m.config.Telemetry, Event{Type: EventSave, Key: key, At: now, Mode: m.config.Mode, Size: entry.Size, Reason: "cache_not_written", TenantID: m.config.TenantID, Namespace: m.config.Namespace})
 	return entry, nil
 }
 
@@ -112,7 +112,7 @@ func (m *Memory) Delete(ctx context.Context, key Key) error {
 	m.mu.Lock()
 	delete(m.entries, key)
 	m.mu.Unlock()
-	emit(m.config.Telemetry, Event{Type: EventDelete, Key: key, At: m.config.Clock().UTC(), Mode: m.config.Mode, Reason: "explicit_invalidation"})
+	emit(m.config.Telemetry, Event{Type: EventDelete, Key: key, At: m.config.Clock().UTC(), Mode: m.config.Mode, Reason: "explicit_invalidation", TenantID: m.config.TenantID, Namespace: m.config.Namespace})
 	return nil
 }
 

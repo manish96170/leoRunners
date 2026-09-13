@@ -1,0 +1,11 @@
+{
+  "apiVersion": "extensions.leorunners.io/v1",
+  "kind": "ExtensionRecord",
+  "extensionId": "cache.advisor",
+  "extensionType": "cache",
+  "emittedAt": "2026-09-13T10:05:00Z",
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-cache-2", "repository": "example/project"},
+  "retention": {"expiresAt": "2026-10-13T10:05:00Z", "redacted": true, "evidenceClass": "operational"},
+  "metadata": {"schemaVersion": "1", "eventType": "cache.hit-rate", "source": "cache-observer-v1", "evidence": "observed", "values": {"backend": "memory", "hit_rate": 0.75, "sample_count": 16}},
+  "advisory": {"status": "review", "severity": "low", "summary": "Cache observations are available for human review.", "confidence": 0.9, "recommendations": ["Compare cache benefits with storage and transfer cost."], "annotations": {"scheduler_independent": true}}
+}

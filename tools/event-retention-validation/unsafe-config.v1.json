@@ -1,0 +1,16 @@
+{
+  "apiVersion": "events.leorunners.io/v1",
+  "kind": "EventArchiveRetention",
+  "metadata": {"name": "unsafe", "version": "1.0.0"},
+  "spec": {
+    "enabled": true,
+    "path": "relative/events.jsonl",
+    "file_mode": "0644",
+    "owner_only": false,
+    "restart_behavior": "truncate",
+    "max_line_bytes": 1024,
+    "max_bytes": 0,
+    "max_files": 0,
+    "max_age_seconds": 0
+  }
+}

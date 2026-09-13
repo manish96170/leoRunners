@@ -1,0 +1,11 @@
+{
+  "apiVersion": "extensions.leorunners.io/v1",
+  "kind": "ExtensionRecord",
+  "extensionId": "analytics.capacity-advisor",
+  "extensionType": "analytics",
+  "emittedAt": "2026-09-13T10:04:00Z",
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-analytics-2", "repository": "example/project"},
+  "retention": {"expiresAt": "2026-10-13T10:04:00Z", "redacted": true, "evidenceClass": "operational"},
+  "metadata": {"schemaVersion": "1", "eventType": "capacity.observation", "source": "analytics-v1", "evidence": "derived", "values": {"provider": "aws", "sample_count": 24, "p95_startup_ms": 78000}},
+  "advisory": {"status": "review", "severity": "low", "summary": "Observed startup samples may justify a capacity review.", "confidence": 0.82, "recommendations": ["Collect more real samples before changing pool limits."], "annotations": {"requires_human_review": true}}
+}

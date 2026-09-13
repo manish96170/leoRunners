@@ -1,8 +1,8 @@
 # Plan
 
-## Current milestone: Phase 19 security hardening
+## Current milestone: Phase 35 final release validation gate
 
-Status: deployment assets complete; local container and cluster validation blocked
+Status: implementation complete; approved live cloud validation remains operator- and environment-gated
 
 The specification requires investigation and architecture documentation before runner implementation. The initial implementation language is Go.
 
@@ -84,12 +84,75 @@ The specification requires investigation and architecture documentation before r
 - Added local read-only security scanner for credentials, privileged containers, host access, RBAC, and AI defaults.
 - Added security policy fixtures and fork/IAM/JIT/Docker/network hardening documentation.
 - Verified security policy, scanner, fixture, race, vet, build, and all existing project checks.
+- Added versioned CI event envelopes with deterministic IDs, redaction, validation, deduplication, bounded subscriptions, and backpressure metrics.
+- Added durable owner-permission JSONL event archive with replay/filtering and restart-safe append behavior.
+- Wired lifecycle telemetry into the event bus and optional `EVENT_ARCHIVE_PATH` runtime sink.
+- Verified event bus/archive tests, race tests, vet, build, fixtures, and full existing project checks.
+- Added versioned extension metadata and advisory output fixtures with offline validation.
+- Added extension registry, bounded dispatch queues, per-extension timeouts, panic/failure isolation, and metrics snapshots.
+- Added deterministic advisory action policy and tenant/extension enablement checks.
+- Verified extension tests, race tests, vet, build, fixture validation, and full project checks.
+- Added the Phase 22 CloudWatch observability Terraform module with retained logs,
+  optional KMS encryption, notification-only M-of-N alarms, p99 duration
+  monitoring, and an alarm-first dashboard.
+- Added versioned low-cardinality alert configuration fixtures and offline
+  secret/cardinality/action validation with pass, warning, and failure exits.
+- Added the observability operations runbook covering triage, missing data,
+  p99 interpretation, escalation, rollback, retention, and cleanup evidence.
+- Added read-only analytics, cache, cost, and security extension consumers with
+  bounded sinks and advisory-only security output.
+- Added dispatcher emission of bounded extension execution, timeout, panic,
+  queue-drop, and report-drop metrics through the existing observability sink.
+- Added extension failure alert fixtures and validation for notification-only
+  actions and low-cardinality dimensions, plus the Phase 23 operations runbook.
+- Added typed extension runtime configuration with disabled-by-default global
+  enablement, exact tenant allowlists, bounded queue/timeout/report settings,
+  and secret-safe diagnostics.
+- Added runtime registration for the built-in read-only consumers behind the
+  tenant policy adapter, and wired extension metrics into `/metrics`.
+- Added versioned runtime policy fixtures and offline validation for wildcard
+  grants, known consumers, bounds, capabilities, redaction, and secrets.
+- Added the Phase 24 deployment guide and rollout/rollback procedures.
+- Added a versioned controlled-validation evidence schema and redacted offline
+  validator covering provider checkpoints, observability, cleanup proof,
+  timestamps, bounded references, secrets, and raw payloads.
+- Added an explicitly opt-in observability module composition to the Terraform
+  dev environment, with disabled-by-default logs, alarms, and dashboard.
+- Added the Phase 25 controlled-validation evidence and approval runbooks.
+- Added schema-compatible evidence generation to the guarded cloud-validation
+  harness for single AWS or GCP live actions.
+- Required successful validation, ordered lifecycle checkpoints, and confirmed
+  cleanup before evidence is atomically written; failed or incomplete runs
+  cannot publish passed evidence.
+- Added focused cloud/evidence integration tests and the Phase 26 live
+  validation operations runbook.
+- Added reviewed scope-file support to cloud validation with read-only AWS
+  account/region, GCP project/zone, and GitHub repository matching.
+- Added fail-closed scope mismatch handling before any live mutation, with
+  secret-safe output and malformed/duplicate/unsupported scope tests.
+- Added approved-scope fixtures and the Phase 27 preflight operations runbook.
+- Completed Phase 28 tenant-isolation tests for enabled, disabled, missing, and
+  alternate tenant attributes, including advisory tenant preservation.
+- Completed Phase 29 bounded JSONL archive retention, rotation, permissions,
+  restart recovery, and retention-policy validation.
+- Completed Phase 30 tenant/namespace-separated cache telemetry, hit-rate
+  summaries, immutable-key checks, and S3 namespace validation.
+- Completed Phase 31 optional CloudWatch subscription routing with explicit
+  destination/filter inputs, encryption and retention gates, and no remediation.
+- Completed Phase 32 Docker/Kubernetes security and rendered-manifest checks,
+  with clear offline skips when Docker or kubectl is unavailable.
+- Completed Phase 33 offline IAM policy simulation for scoped resources,
+  constrained PassRole, wildcard rejection, and review-only application.
+- Completed Phase 34 multi-replica fenced reservation, takeover, and capacity
+  conservation tests.
+- Completed Phase 35 read-only release validation aggregation with redacted,
+  atomic reports and live-provisioning detection.
 
 ### Next
 
-1. Run security validation against the exact built image and deployment manifests.
-2. Review IAM/OIDC and untrusted-fork policy in a controlled environment.
-3. Perform one approved live cloud/workload validation with security evidence.
+1. Run the approved read-only AWS/GCP/GitHub preflight with the reviewed scope file.
+2. Configure production retention, notification routes, and tenant rollout.
+3. Perform one approved live cloud/workload validation and publish validated evidence.
 
 ### Guardrails
 

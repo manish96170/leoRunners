@@ -1,0 +1,17 @@
+apiVersion: extensions.leorunners.io/v1
+kind: ExtensionRuntimePolicy
+metadata:
+  name: unsafe-consumer-policy
+  version: 1.0.0
+spec:
+  global:
+    enabled: true
+    tenant_allowlist: [tenant-demo]
+  consumers:
+    - id: scheduler
+      enabled: true
+      tenant_allowlist: [tenant-demo]
+      queue: {max_items: 128, overflow: drop}
+      timeout_ms: 250
+      capabilities: [read_events, provision]
+      redaction: {required: false, mode: raw, max_bytes: 1048576}

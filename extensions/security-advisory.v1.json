@@ -1,0 +1,11 @@
+{
+  "apiVersion": "extensions.leorunners.io/v1",
+  "kind": "ExtensionRecord",
+  "extensionId": "security.advisor",
+  "extensionType": "security",
+  "emittedAt": "2026-09-13T10:06:00Z",
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-security-2", "repository": "example/project"},
+  "retention": {"expiresAt": "2026-09-20T10:06:00Z", "redacted": true, "evidenceClass": "diagnostic"},
+  "metadata": {"schemaVersion": "1", "eventType": "security.observation", "source": "security-policy-v1", "evidence": "observed", "values": {"host_mount": false, "secret_access": false, "cloud_identity": false}},
+  "advisory": {"status": "informational", "severity": "none", "summary": "The observed workload matched the isolated security profile.", "confidence": 1, "recommendations": [], "annotations": {"policy_decision": "allow-isolated"}}
+}

@@ -13,7 +13,8 @@ controller talks to AWS, GCP, and GitHub APIs, not to the Kubernetes API. Use a
 
 The workload must:
 
-- use the repository `Dockerfile` image by immutable digest;
+- use the repository `Dockerfile` image by immutable digest. Replace the
+  `replace-with-real-digest` placeholder before applying;
 - expose container port `8080`;
 - run as non-root UID/GID `65532:65532`;
 - set `allowPrivilegeEscalation: false` and drop all capabilities;
@@ -112,12 +113,20 @@ resources after verification.
 The checked-in files are a fake-mode-compatible single-replica baseline, not a
 production-ready configuration. Replace the image, storage class, identity
 annotations, and secret integration as required by the target cluster. Review
-the rendered result before applying it:
+the rendered result before applying it. The validator checks the checked-in
+contract offline, then runs rendered-manifest checks when `kubectl` is
+available; skipped rendering is reported explicitly:
 
 ```bash
 kubectl apply --dry-run=client -k deploy/kubernetes
 kubectl diff -k deploy/kubernetes
 ./deploy/kubernetes/validate.sh
+```
+
+Run the focused manifest test, which works without Docker or a cluster:
+
+```bash
+./deploy/kubernetes/test.sh
 ```
 
 With a disposable cluster, verify:

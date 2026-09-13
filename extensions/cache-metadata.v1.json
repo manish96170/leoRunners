@@ -1,0 +1,11 @@
+{
+  "apiVersion": "extensions.leorunners.io/v1",
+  "kind": "ExtensionRecord",
+  "extensionId": "cache.observer",
+  "extensionType": "cache",
+  "emittedAt": "2026-09-13T10:01:00Z",
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-cache-1", "runnerId": "runner-cache-1", "repository": "example/project"},
+  "retention": {"expiresAt": "2026-10-13T10:01:00Z", "redacted": true, "evidenceClass": "metadata"},
+  "metadata": {"schemaVersion": "1", "eventType": "cache.restore", "source": "cache-observer-v1", "evidence": "observed", "values": {"backend": "s3", "result": "miss", "key_version": "sha256-v1", "bytes": 0}},
+  "advisory": {"status": "informational", "severity": "none", "summary": "Cache restore outcome was recorded without exposing the cache key.", "confidence": 1, "recommendations": [], "annotations": {"key_exposed": false}}
+}

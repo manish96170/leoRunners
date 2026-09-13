@@ -33,6 +33,20 @@ module "runner_runtime" {
   tags                     = local.common_tags
 }
 
+module "observability" {
+  count  = var.enable_observability ? 1 : 0
+  source = "../../modules/observability"
+
+  name               = var.observability_name
+  namespace          = var.observability_namespace
+  log_retention_days = var.observability_log_retention_days
+  kms_key_id         = var.observability_kms_key_id
+  skip_destroy       = var.observability_skip_destroy
+  metric_dimensions  = var.observability_metric_dimensions
+  alarm_actions      = var.observability_alarm_actions
+  tags               = local.common_tags
+}
+
 locals {
   common_tags = merge(
     {

@@ -1,0 +1,14 @@
+{
+  "apiVersion": "events.leorunners.io/v1",
+  "kind": "LifecycleEvent",
+  "eventId": "evt-runner-ready-001",
+  "eventType": "runner.ready",
+  "occurredAt": "2026-09-13T10:01:12Z",
+  "sequence": 2,
+  "source": {"component": "provider", "version": "aws-ec2-v1", "provider": "aws"},
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-1001", "runnerId": "runner-501", "repository": "manish96170/leoRunners", "runId": "run-77"},
+  "delivery": {"deduplicationKey": "runner:runner-501:ready", "replayKey": "job-1001:2", "attempt": 1, "causationId": "evt-job-queued-001"},
+  "retention": {"expiresAt": "2026-10-13T10:01:12Z", "redacted": true, "evidenceClass": "operational"},
+  "data": {"status": "ready", "provider": "aws", "extensions": {"instance_state": "running"}}
+}
+

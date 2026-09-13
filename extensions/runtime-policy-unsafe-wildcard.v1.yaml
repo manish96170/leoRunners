@@ -1,0 +1,17 @@
+apiVersion: extensions.leorunners.io/v1
+kind: ExtensionRuntimePolicy
+metadata:
+  name: unsafe-wildcard-policy
+  version: 1.0.0
+spec:
+  global:
+    enabled: true
+    tenant_allowlist: ["*"]
+  consumers:
+    - id: analytics
+      enabled: true
+      tenant_allowlist: ["*"]
+      queue: {max_items: 128, overflow: drop}
+      timeout_ms: 250
+      capabilities: [read_events, emit_advisories]
+      redaction: {required: true, mode: metadata-only, max_bytes: 16384}

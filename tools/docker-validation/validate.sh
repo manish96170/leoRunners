@@ -55,11 +55,13 @@ trap cleanup EXIT INT TERM HUP
 printf 'building existing root Dockerfile as %s\n' "$image_tag"
 docker build --file "$repo_root/Dockerfile" --tag "$image_tag" "$repo_root"
 
-inspect_format='{{json .Config.User}} {{json .Config.ExposedPorts}} {{json .Config.Entrypoint}}'
+inspect_format='{{json .Config.User}} {{json .Config.ExposedPorts}} {{json .Config.Entrypoint}} {{.Os}} {{.Architecture}}'
 metadata=$(docker image inspect --format "$inspect_format" "$image_tag")
 user=$(printf '%s' "$metadata" | awk '{print $1}' | tr -d '"')
 ports=$(printf '%s' "$metadata" | awk '{print $2}')
 entrypoint=$(printf '%s' "$metadata" | awk '{print $3}')
+os=$(printf '%s' "$metadata" | awk '{print $4}')
+architecture=$(printf '%s' "$metadata" | awk '{print $5}')
 
 [ "$user" = '65532:65532' ] || {
     printf 'non-root check failed: expected UID/GID 65532:65532, got %s\n' "$user" >&2
@@ -79,6 +81,16 @@ printf '%s\n' 'exposed port check passed: 8080/tcp'
 }
 printf '%s\n' 'entrypoint check passed: /usr/local/bin/runner-controller'
 
+[ "$os" = 'linux' ] || {
+    printf 'operating system check failed: expected linux, got %s\n' "$os" >&2
+    exit 1
+}
+[ "$architecture" = 'amd64' ] || {
+    printf 'architecture check failed: expected amd64, got %s\n' "$architecture" >&2
+    exit 1
+}
+printf '%s\n' 'platform check passed: linux/amd64'
+
 printf '%s\n' 'checking image filesystem for forbidden secret files'
 docker run --rm --entrypoint /bin/sh "$image_tag" -c '
     set -eu
@@ -95,6 +107,18 @@ docker run --rm --entrypoint /bin/sh "$image_tag" -c '
     test ! -e /run/secrets
 '
 printf '%s\n' 'forbidden secret-file check passed'
+
+printf '%s\n' 'checking read-only root filesystem contract'
+docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev \
+    --entrypoint /bin/sh "$image_tag" -c '
+    set -eu
+    test -w /tmp
+    if touch /usr/local/bin/leo-runners-read-only-check 2>/dev/null; then
+        printf "%s\n" "root filesystem is writable" >&2
+        exit 1
+    fi
+'
+printf '%s\n' 'read-only root filesystem check passed'
 
 if [ "$run_smoke" -eq 1 ]; then
     require_command curl

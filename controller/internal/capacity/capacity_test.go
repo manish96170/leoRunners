@@ -1,9 +1,13 @@
 package capacity
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/leo-runners/ci-platform/controller/internal/coordination"
 )
 
 func testPool(id string, ownership Ownership) Pool {
@@ -95,4 +99,110 @@ func TestInvalidPool(t *testing.T) {
 			t.Fatalf("validation error = %v", err)
 		}
 	}
+}
+
+func TestTwoReplicaFailoverRejectsStaleOwnerAndConservesCapacity(t *testing.T) {
+	clock := newCapacityTestClock(time.Unix(500, 0))
+	leases := coordination.NewMemoryStoreWithClock(clock.Now)
+	coordinator, err := coordination.New(leases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := NewRegistry()
+	pool := testPool("shared", Managed)
+	pool.Capacity.MaxRunners = 3
+	if err := registry.Register(pool); err != nil {
+		t.Fatal(err)
+	}
+
+	firstLease, err := coordinator.Acquire(context.Background(), "capacity/shared", "controller-a", 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := NewReplica(registry, string(firstLease.Owner), firstLease.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.ReserveFenced("job-a", "shared", 2, 4, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.ReserveFenced("job-a", "shared", 2, 4, 0); err != nil {
+		t.Fatalf("retry was not idempotent: %v", err)
+	}
+
+	clock.Advance(11 * time.Second)
+	secondLease, err := coordinator.Acquire(context.Background(), "capacity/shared", "controller-b", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewReplica(registry, string(secondLease.Owner), secondLease.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secondLease.Token <= firstLease.Token {
+		t.Fatalf("failover token %d did not advance past %d", secondLease.Token, firstLease.Token)
+	}
+
+	if err := first.ReserveFenced("job-stale", "shared", 1, 1, 0); !errors.Is(err, ErrStaleReplica) {
+		t.Fatalf("stale reserve error = %v, want ErrStaleReplica", err)
+	}
+	if err := first.ReleaseFenced("job-a"); !errors.Is(err, ErrStaleReplica) {
+		t.Fatalf("stale release error = %v, want ErrStaleReplica", err)
+	}
+	if err := second.ReserveFenced("job-b", "shared", 1, 2, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.ReserveFenced("job-c", "shared", 1, 1, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.ReserveFenced("job-d", "shared", 1, 1, 0); !errors.Is(err, ErrNoCapacity) {
+		t.Fatalf("over-capacity reserve error = %v, want ErrNoCapacity", err)
+	}
+
+	evidence := registry.Evidence()
+	if evidence.ActiveOwner != "controller-b" || evidence.ActiveToken != secondLease.Token || len(evidence.Reservations) != 3 {
+		t.Fatalf("recovery evidence = %+v", evidence)
+	}
+	if evidence.Reservations[0].ID != "job-a" || evidence.Reservations[1].ID != "job-b" || evidence.Reservations[2].ID != "job-c" {
+		t.Fatalf("reservations are not deterministic: %+v", evidence.Reservations)
+	}
+	got, err := registry.Get("shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Capacity.UsedRunners != 3 || got.Capacity.UsedCPU != 4 || got.Capacity.UsedMemoryGB != 7 {
+		t.Fatalf("capacity conservation failed: %+v", got.Capacity)
+	}
+	if err := second.ReleaseFenced("job-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.ReleaseFenced("job-b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.ReleaseFenced("job-c"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = registry.Get("shared")
+	if got.Capacity.UsedRunners != 0 || got.Capacity.UsedCPU != 0 || got.Capacity.UsedMemoryGB != 0 {
+		t.Fatalf("capacity after partial release = %+v", got.Capacity)
+	}
+}
+
+type capacityTestClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func newCapacityTestClock(now time.Time) *capacityTestClock { return &capacityTestClock{now: now} }
+
+func (c *capacityTestClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *capacityTestClock) Advance(delta time.Duration) {
+	c.mu.Lock()
+	c.now = c.now.Add(delta)
+	c.mu.Unlock()
 }

@@ -1,0 +1,16 @@
+{
+  "apiVersion": "validation.leorunners.io/v1",
+  "kind": "PreflightEvidence",
+  "metadata": { "name": "aws-read-only-preflight", "version": "1.0.0" },
+  "spec": {
+    "run": { "run_id": "preflight-20260913-001", "mode": "read_only_preflight", "started_at": "2026-09-13T08:00:00Z", "finished_at": "2026-09-13T08:00:08Z", "duration_ms": 8000, "outcome": "passed" },
+    "provider": { "name": "aws", "region": "ap-south-1", "account_scope": "configured-account", "resource_scope": ["identity", "compute", "observability", "cleanup"] },
+    "observability": {
+      "metrics": { "status": "available", "checked_at": "2026-09-13T08:00:03Z" },
+      "logs": { "status": "available", "checked_at": "2026-09-13T08:00:04Z" },
+      "alarms": { "status": "available", "checked_at": "2026-09-13T08:00:05Z" },
+      "dashboards": { "status": "available", "checked_at": "2026-09-13T08:00:06Z" }
+    },
+    "cleanup": { "attempted": true, "completed": true, "resource_refs": ["preflight:aws:ap-south-1:no-resources-created"], "verified_at": "2026-09-13T08:00:07Z" }
+  }
+}

@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -33,6 +34,57 @@ func TestNewKeyIsOpaqueAndContentAddressed(t *testing.T) {
 	}
 	if _, err := NewKey(KeyInput{Repository: "a/b", Workflow: "build", Lockfile: "", Profile: "p1"}); !errors.Is(err, ErrInvalidKey) {
 		t.Fatalf("expected invalid key, got %v", err)
+	}
+	aTenant, _ := NewKey(KeyInput{TenantID: "tenant-a", Namespace: "go", Repository: "a/b", Workflow: "build", Lockfile: "lock-content", Profile: "p1"})
+	bTenant, _ := NewKey(KeyInput{TenantID: "tenant-b", Namespace: "go", Repository: "a/b", Workflow: "build", Lockfile: "lock-content", Profile: "p1"})
+	if aTenant == bTenant {
+		t.Fatal("tenant scopes must not share cache identity")
+	}
+	if err := ValidateScope("tenant/a", "go"); !errors.Is(err, ErrInvalidEntry) {
+		t.Fatalf("unsafe tenant accepted: %v", err)
+	}
+	if err := ValidateScope("tenant", strings.Repeat("x", 65)); !errors.Is(err, ErrInvalidEntry) {
+		t.Fatalf("unbounded namespace accepted: %v", err)
+	}
+}
+
+func TestSummaryCollectorAggregatesBoundedWorkloadTelemetry(t *testing.T) {
+	collector := NewSummaryCollector(1)
+	for _, event := range []telemetry.Event{
+		{Type: EventHit, Metadata: map[string]string{"tenant_id": "tenant-a", "namespace": "go"}},
+		{Type: EventMiss, Metadata: map[string]string{"tenant_id": "tenant-a", "namespace": "go"}},
+		{Type: EventSave, Metadata: map[string]string{"tenant_id": "tenant-a", "namespace": "go"}},
+		{Type: EventRestore, Metadata: map[string]string{"tenant_id": "tenant-a", "namespace": "go"}},
+		{Type: EventDelete, Metadata: map[string]string{"tenant_id": "tenant-a", "namespace": "go"}},
+		{Type: EventHit, Metadata: map[string]string{"tenant_id": "tenant-b", "namespace": "go"}},
+	} {
+		_ = collector.Emit(event)
+	}
+	got := collector.Snapshot()
+	if len(got) != 1 || got[0].TenantID != "tenant-a" || got[0].Hits != 1 || got[0].Misses != 1 || got[0].Requests != 2 || got[0].HitRate != 0.5 || got[0].Saves != 1 || got[0].Restores != 1 || got[0].Invalidations != 1 {
+		t.Fatalf("summary = %+v", got)
+	}
+	if collector.Dropped() != 1 {
+		t.Fatalf("dropped = %d, want 1", collector.Dropped())
+	}
+}
+
+func TestMemoryEmitsRealWorkloadSummaryByScope(t *testing.T) {
+	collector := NewSummaryCollector(4)
+	key := testKey(t)
+	c, err := NewMemory(Config{Mode: ModeEnabled, TenantID: "tenant-a", Namespace: "go", Telemetry: collector})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Put(context.Background(), key, []byte("payload"), Metadata{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := c.Get(context.Background(), key); err != nil || !ok {
+		t.Fatalf("get: ok=%v err=%v", ok, err)
+	}
+	got := collector.Snapshot()
+	if len(got) != 1 || got[0].TenantID != "tenant-a" || got[0].Namespace != "go" || got[0].Hits != 1 || got[0].Misses != 0 || got[0].Saves != 1 || got[0].Restores != 1 {
+		t.Fatalf("real workload summary = %+v", got)
 	}
 }
 

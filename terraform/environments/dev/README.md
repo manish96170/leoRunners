@@ -5,6 +5,19 @@ runner-runtime modules. It creates no VPC, subnet, security group, AMI, launch
 template, GitHub integration, or remote backend. Those are deliberate inputs or
 separate deployment concerns.
 
+## Optional observability
+
+CloudWatch logs, notification-only alarms, and a dashboard are composed from
+`../../modules/observability` only when `enable_observability = true`. The
+default is `false`, so the normal development composition creates no
+observability resources. Review retention, the fixed low-cardinality dimensions,
+and any external notification ARNs before enabling it. This root creates no SNS
+topic, IAM permission, remediation action, or lifecycle automation.
+
+When disabled, the observability outputs are `null` or empty. When enabled, the
+module uses the existing AWS provider and the common dev tags; it does not
+create networking or change the required reviewed controller policy input.
+
 ## Required policy review
 
 `controller_generated_policy_json` is required and has no default. Supply the
@@ -48,5 +61,11 @@ terraform init -backend=false
 terraform validate
 terraform plan -out=dev.tfplan -var-file=dev.tfvars
 ```
+
+To inspect the opt-in surface without applying it, set
+`enable_observability = true` in a private tfvars file and run the same
+backend-disabled validation and plan commands. Confirm that the plan contains
+only the expected log group, alarms, and dashboard in addition to the existing
+composition.
 
 No credentials belong in Terraform files, user data, AMIs, or policy artifacts.

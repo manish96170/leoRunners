@@ -34,6 +34,29 @@ The default all checks every provider. Read-only mode does not call
 RunInstances, TerminateInstances, GCP create/delete, or the GitHub JIT POST
 endpoint.
 
+## Reviewed scope gate
+
+Pass `--scope-file PATH` to require the read-only preflight identity to match a
+reviewed, non-secret scope file. The file is strict `key=value` text with
+optional comments and supports these keys:
+
+~~~text
+aws_account_id=000000000000
+aws_region=us-east-1
+gcp_project=fixture-project
+gcp_zone=us-central1-a
+github_repository=OWNER/REPOSITORY
+~~~
+
+Each key is optional, but unknown, duplicate, malformed, or mismatched values
+fail closed. AWS account and GCP project/zone are checked through read-only
+identity APIs. GitHub repository scope is checked against the repository API
+target after the repository and Actions APIs respond successfully. Scope
+values are never included in reports, and the file must not contain tokens or
+other credentials. The same gate runs before any live action; `--allow-live`
+and the exact `--confirm I_UNDERSTAND_EPHEMERAL_RESOURCES` confirmation remain
+required.
+
 ## Guarded live actions
 
 Live mode requires --allow-live, an explicit --live-action, and the exact
@@ -48,6 +71,16 @@ tools/cloud-validation/validate.sh \
   --live-action aws-ec2 \
   --report /tmp/leo-cloud-validation.json
 ~~~
+
+Use `--evidence-report PATH` when a controlled-validation evidence artifact is
+required. The harness emits this schema-compatible document only for one
+successful AWS or GCP action after cleanup succeeds, and validates it before
+atomic publication. Failed validation, incomplete cleanup, GitHub JIT, and
+multi-provider actions never produce passed evidence.
+
+Evidence identity and workflow fields can be supplied with
+`LEO_EVIDENCE_RUN_ID`, `LEO_EVIDENCE_REPOSITORY`, and
+`LEO_EVIDENCE_WORKFLOW`; the defaults are safe controlled-validation values.
 
 Available actions are aws-ec2, gcp-vm, github-jit, and all.
 
@@ -79,9 +112,10 @@ tools/cloud-validation/test.sh
 ~~~
 
 The tests prepend local fixtures for aws, gcloud, and curl. They verify shell
-syntax, missing-variable failures, the exact live confirmation guard,
-read-only non-creation, AWS cleanup, and secret-free JSON reporting. They do
-not contact AWS, GCP, or GitHub.
+syntax, reviewed-scope success and mismatch failures, missing-variable
+failures, the exact live confirmation guard, read-only non-creation, AWS
+cleanup, and secret-free JSON reporting. They do not contact AWS, GCP, or
+GitHub.
 
 Live validation is still an operational gate, not proof that a complete GitHub
 job ran. Use a dedicated account/project, a validation-only Launch Template

@@ -98,7 +98,7 @@ type Dimensions map[string]string
 
 var allowedDimensions = map[string]struct{}{
 	"provider": {}, "region": {}, "outcome": {}, "event_type": {},
-	"state": {}, "capacity_owner": {}, "capacity_pool": {}, "error_class": {},
+	"state": {}, "capacity_owner": {}, "capacity_pool": {}, "error_class": {}, "extension": {},
 }
 
 const (

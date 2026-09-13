@@ -1,0 +1,17 @@
+apiVersion: extensions.leorunners.io/v1
+kind: ExtensionRuntimePolicy
+metadata:
+  name: unsafe-bounds-policy
+  version: 1.0.0
+spec:
+  global:
+    enabled: true
+    tenant_allowlist: [tenant-demo]
+  consumers:
+    - id: analytics
+      enabled: true
+      tenant_allowlist: [tenant-demo]
+      queue: {max_items: 0, overflow: drop}
+      timeout_ms: 60000
+      capabilities: [read_events, emit_advisories]
+      redaction: {required: true, mode: metadata-only, max_bytes: 16384}

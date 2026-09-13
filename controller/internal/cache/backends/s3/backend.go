@@ -38,6 +38,7 @@ const (
 
 var bucketPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
 var digestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+var namespacePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 // API is the subset of the AWS S3 client used by Backend. *s3.Client satisfies
 // this interface, while tests can provide a deterministic implementation.
@@ -254,16 +255,20 @@ func validatePrefix(prefix string) error {
 	if prefix == "" {
 		return nil
 	}
-	if len(prefix) > 900 || strings.HasPrefix(prefix, "/") || strings.HasSuffix(prefix, "/") || strings.Contains(prefix, "\\") || strings.Contains(prefix, "..") || strings.ContainsAny(prefix, "\r\n") {
+	if len(prefix) > 256 || strings.HasPrefix(prefix, "/") || strings.HasSuffix(prefix, "/") || strings.Contains(prefix, "\\") || strings.Contains(prefix, "..") || strings.ContainsAny(prefix, "\r\n\x00") {
 		return errors.New("prefix must be relative, traversal-free, and not end with a slash")
 	}
 	for _, part := range strings.Split(prefix, "/") {
-		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "\x00") {
-			return errors.New("prefix cannot contain empty path components")
+		if part == "" || !namespacePattern.MatchString(part) {
+			return errors.New("prefix components must be bounded lowercase identifiers")
 		}
 	}
 	return nil
 }
+
+// ValidateNamespace validates an S3 cache namespace without contacting AWS.
+// Prefix is retained as the configuration field for compatibility.
+func ValidateNamespace(namespace string) error { return validatePrefix(namespace) }
 
 func optionalString(value string) *string {
 	if value == "" {

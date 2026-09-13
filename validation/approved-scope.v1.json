@@ -1,0 +1,18 @@
+{
+  "apiVersion": "validation.leorunners.io/v1",
+  "kind": "ApprovedValidationScope",
+  "metadata": { "name": "aws-controlled-validation", "version": "1.0.0" },
+  "spec": {
+    "provider": "aws",
+    "region": "ap-south-1",
+    "project": "configured-account",
+    "repository": "manish96170/leoRunners",
+    "resource_prefix": "leo-validation",
+    "max_resources": 8,
+    "deadline": "2026-09-14T18:30:00Z",
+    "ownership": {
+      "notification": "platform-oncall@example.com",
+      "rollback": "release-manager"
+    }
+  }
+}

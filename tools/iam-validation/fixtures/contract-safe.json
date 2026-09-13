@@ -1,0 +1,22 @@
+{
+  "version": "leo.iam-contract.v1",
+  "review_only": true,
+  "required_actions": ["ec2:RunInstances", "iam:PassRole", "dynamodb:GetItem", "dynamodb:PutItem"],
+  "forbidden_actions": ["iam:*", "ec2:*", "dynamodb:*"],
+  "action_resources": {
+    "iam:PassRole": ["arn:aws:iam::123456789012:role/leo-runner-*"],
+    "ec2:RunInstances": ["arn:aws:ec2:us-east-1:123456789012:launch-template/lt-0123456789abcdef0"],
+    "dynamodb:GetItem": ["arn:aws:dynamodb:us-east-1:123456789012:table/leo-controller-state"],
+    "dynamodb:PutItem": ["arn:aws:dynamodb:us-east-1:123456789012:table/leo-controller-state"]
+  },
+  "pass_role_services": ["ec2.amazonaws.com"],
+  "dynamodb_table_arns": ["arn:aws:dynamodb:us-east-1:123456789012:table/leo-controller-state"],
+  "dynamodb_index_arns": ["arn:aws:dynamodb:us-east-1:123456789012:table/leo-controller-state/index/*"],
+  "simulations": [
+    {"name": "runner launch", "action": "ec2:RunInstances", "resource": "arn:aws:ec2:us-east-1:123456789012:launch-template/lt-0123456789abcdef0", "expect": "allow"},
+    {"name": "runner role", "action": "iam:PassRole", "resource": "arn:aws:iam::123456789012:role/leo-runner-prod", "context": {"iam:PassedToService": "ec2.amazonaws.com"}, "expect": "allow"},
+    {"name": "wrong role", "action": "iam:PassRole", "resource": "arn:aws:iam::123456789012:role/admin", "context": {"iam:PassedToService": "ec2.amazonaws.com"}, "expect": "deny"},
+    {"name": "wrong service", "action": "iam:PassRole", "resource": "arn:aws:iam::123456789012:role/leo-runner-prod", "context": {"iam:PassedToService": "lambda.amazonaws.com"}, "expect": "deny"},
+    {"name": "wrong table", "action": "dynamodb:GetItem", "resource": "arn:aws:dynamodb:us-east-1:123456789012:table/other", "expect": "deny"}
+  ]
+}

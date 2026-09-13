@@ -14,6 +14,8 @@ grep -Fq 'iam:PassRole' README.md || { echo 'README must document iam:PassRole s
 grep -Fq 'ec2:RunInstances' README.md || { echo 'README must document ec2:RunInstances scoping' >&2; exit 2; }
 grep -Fq 'generated_policy_json' main.tf || { echo 'generated policy input is missing' >&2; exit 2; }
 grep -Fq 'generated_policy_arns' main.tf || { echo 'generated policy ARN input is missing' >&2; exit 2; }
+grep -Fq 'review-only' README.md || { echo 'README must state review-only behavior' >&2; exit 2; }
+grep -Fq 'tools/iam-validation/validate.sh' README.md || { echo 'README must reference the offline IAM contract checker' >&2; exit 2; }
 
 if rg -n '"Action"\s*:\s*"\*"|"Resource"\s*:\s*"\*"' --glob '*.tf' .; then
   echo 'unscoped IAM wildcard found in Terraform files' >&2

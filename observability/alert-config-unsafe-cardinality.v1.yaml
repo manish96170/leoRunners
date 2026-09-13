@@ -1,0 +1,21 @@
+apiVersion: observability.leorunners.io/v1
+kind: AlertConfig
+metadata:
+  name: unsafe-cardinality
+  version: 1.0.0
+spec:
+  enabled: true
+  namespace: LeoRunners/Controller
+  dimensions: [provider, job_id]
+  alerts:
+    - name: per-job-alert
+      enabled: true
+      metric: lifecycle_events_total
+      statistic: Sum
+      comparison: GreaterThanThreshold
+      threshold: 1
+      period_seconds: 60
+      evaluation_periods: 1
+      severity: warning
+      dimensions: [provider, job_id]
+      actions: [notify_team]

@@ -41,14 +41,35 @@ The repository is a greenfield Go project. Phase 0 documentation and the Phase 1
 - Phase 17 adds `controller/internal/cache/`, the optional S3 backend, `cache/`, and `docs/phase-17-plan.md`.
 - Phase 18 adds `controller/internal/network/`, `terraform/modules/runner-network/`, `network/`, and `docs/phase-18-plan.md`.
 - Phase 19 adds `controller/internal/security/`, `tools/security-validation/`, `security/`, and `docs/phase-19-plan.md`.
+- Phase 20 adds `controller/internal/events/`, the optional JSONL archive, `events/`, and `docs/phase-20-plan.md`.
+- Phase 21 adds `controller/internal/extensions/`, advisory policy handling, `extensions/`, and `docs/phase-21-plan.md`.
+- Phase 22 adds the CloudWatch observability Terraform module, versioned alert
+  fixtures and validator, and the operator runbook in
+  `docs/observability-operations.md`.
+- Phase 23 adds read-only analytics/cache/cost/security consumers, runtime
+  extension metrics, extension alert fixtures, and `docs/extensions-operations.md`.
+- Phase 24 adds typed extension runtime configuration, explicit tenant-scoped
+  registration, runtime policy fixtures/validation, and `docs/extensions-deployment.md`.
+- Phase 25 adds controlled-validation evidence schema/fixtures/validator,
+  optional observability Terraform composition, and the evidence runbooks.
+- Phase 26 adds guarded cloud-validation evidence generation for successful
+  single-provider AWS/GCP runs, integration tests, and live-validation operations documentation.
+- Phase 27 adds reviewed scope-file checks for cloud preflight, approved-scope
+  fixtures/validation, and `docs/preflight-scope-operations.md`.
+- Phases 28-35 add tenant isolation, archive retention, cache telemetry,
+  CloudWatch routing, Docker/Kubernetes checks, IAM simulation, multi-replica
+  failover tests, and the read-only release-validation gate.
 
 ## Continue here
 
 Read `docs/phase-1-plan.md`, then extend the current implementation in this order:
 
-1. Run `tools/security-validation/validate.sh --root .` and review the AI opt-in warning.
-2. Scan the exact Docker image and Kubernetes-rendered manifests once Docker/kubectl are available.
-3. Review IAM/OIDC and fork policy before approved live cloud validation.
+1. Run the read-only AWS/GCP/GitHub preflight and review target ownership.
+2. Configure production retention and extension notification routes.
+3. Run an approved live validation and validate the redacted evidence package
+   with `tools/evidence-validation/test.sh`; use `--evidence-report` only with
+   a single approved AWS or GCP live action. Supply a reviewed `--scope-file`
+   and stop on any identity or scope mismatch.
 
 Do not add AWS calls until the fake-provider end-to-end test passes.
 
@@ -69,3 +90,7 @@ Do not add AWS calls until the fake-provider end-to-end test passes.
 - `kubectl`, Kind, k3d, and Minikube are also unavailable locally, so Kubernetes
   client and cluster validation remain unverified. The local host is macOS
   arm64; Docker Desktop is required before image or local-cluster testing.
+- CloudWatch resources have not been applied in this environment. Terraform
+  provider validation remains environment-dependent; module formatting and
+  offline alert validation pass. Configure a reviewed KMS key and notification
+  destination before enabling production alarms.

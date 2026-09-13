@@ -15,4 +15,4 @@ resources:
 images:
   - name: leo-runners/controller
     newName: ghcr.io/example/leo-runners-controller
-    newTag: replace-with-digest
+    digest: sha256:replace-with-real-digest

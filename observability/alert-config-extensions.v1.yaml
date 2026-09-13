@@ -1,0 +1,65 @@
+apiVersion: observability.leorunners.io/v1
+kind: AlertConfig
+metadata:
+  name: extensions
+  version: 1.0.0
+spec:
+  enabled: true
+  namespace: LeoRunners/Controller
+  dimensions: [provider, region, extension, error_class, outcome]
+  alerts:
+    - name: extension-failures
+      enabled: true
+      metric: extension_failures_total
+      statistic: Sum
+      comparison: GreaterThanOrEqualToThreshold
+      threshold: 1
+      period_seconds: 60
+      evaluation_periods: 3
+      severity: critical
+      dimensions: [provider, extension, error_class]
+      actions: [notify_oncall]
+    - name: extension-timeouts
+      enabled: true
+      metric: extension_timeouts_total
+      statistic: Sum
+      comparison: GreaterThanThreshold
+      threshold: 0
+      period_seconds: 60
+      evaluation_periods: 3
+      severity: warning
+      dimensions: [provider, extension]
+      actions: [notify_team]
+    - name: extension-panics
+      enabled: true
+      metric: extension_panics_total
+      statistic: Sum
+      comparison: GreaterThanThreshold
+      threshold: 0
+      period_seconds: 60
+      evaluation_periods: 1
+      severity: critical
+      dimensions: [extension, error_class]
+      actions: [notify_oncall]
+    - name: extension-events-dropped
+      enabled: true
+      metric: extension_events_dropped_total
+      statistic: Sum
+      comparison: GreaterThanThreshold
+      threshold: 0
+      period_seconds: 60
+      evaluation_periods: 5
+      severity: warning
+      dimensions: [provider, region, outcome]
+      actions: [notify_team]
+    - name: extension-reports-dropped
+      enabled: true
+      metric: extension_reports_dropped_total
+      statistic: Sum
+      comparison: GreaterThanThreshold
+      threshold: 0
+      period_seconds: 60
+      evaluation_periods: 5
+      severity: warning
+      dimensions: [provider, extension]
+      actions: [notify_team]

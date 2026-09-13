@@ -100,6 +100,56 @@ variable "enable_runner_ssm" {
   default     = false
 }
 
+variable "enable_observability" {
+  description = "Explicitly create the optional CloudWatch logs, alarms, and dashboard surface."
+  type        = bool
+  default     = false
+}
+
+variable "observability_name" {
+  description = "Stable name used for optional CloudWatch observability resources."
+  type        = string
+  default     = "leo-runners-dev-controller"
+}
+
+variable "observability_namespace" {
+  description = "CloudWatch namespace emitted by the controller observability exporter."
+  type        = string
+  default     = "LeoRunners/Controller"
+}
+
+variable "observability_log_retention_days" {
+  description = "Retention period for optional controller telemetry logs."
+  type        = number
+  default     = 30
+}
+
+variable "observability_kms_key_id" {
+  description = "Optional customer-managed KMS key ID or ARN for observability logs."
+  type        = string
+  default     = null
+}
+
+variable "observability_skip_destroy" {
+  description = "Keep the optional observability log group when this composition is destroyed."
+  type        = bool
+  default     = true
+}
+
+variable "observability_metric_dimensions" {
+  description = "Fixed low-cardinality dimensions for optional CloudWatch alarms and dashboard widgets."
+  type        = map(string)
+  default = {
+    Environment = "dev"
+  }
+}
+
+variable "observability_alarm_actions" {
+  description = "Optional notification ARNs for observability alarms; no remediation actions are created."
+  type        = list(string)
+  default     = []
+}
+
 variable "runner_permissions_boundary_arn" {
   description = "Optional permissions boundary ARN for the runner role."
   type        = string

@@ -1,0 +1,11 @@
+{
+  "apiVersion": "extensions.leorunners.io/v1",
+  "kind": "ExtensionRecord",
+  "extensionId": "intelligence.failure-analysis",
+  "extensionType": "intelligence",
+  "emittedAt": "2026-09-13T10:03:00Z",
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-intelligence-1", "repository": "example/project"},
+  "retention": {"expiresAt": "2026-09-20T10:03:00Z", "redacted": true, "evidenceClass": "diagnostic"},
+  "metadata": {"schemaVersion": "1", "eventType": "job.failure-analysis", "source": "intelligence-disabled-v1", "evidence": "derived", "values": {"category": "dependency", "model_used": false, "input_bytes": 0}},
+  "advisory": {"status": "none", "severity": "none", "summary": "No automated analysis was requested because intelligence is disabled.", "confidence": 1, "recommendations": [], "annotations": {"model_enabled": false, "action_policy": "advisory-only"}}
+}

@@ -97,11 +97,13 @@ type Request struct {
 }
 
 var (
-	ErrInvalidPool  = errors.New("invalid capacity pool")
-	ErrPoolExists   = errors.New("capacity pool already exists")
-	ErrPoolNotFound = errors.New("capacity pool not found")
-	ErrNoCapacity   = errors.New("no capacity pool available")
-	ErrReservation  = errors.New("capacity reservation failed")
+	ErrInvalidPool    = errors.New("invalid capacity pool")
+	ErrPoolExists     = errors.New("capacity pool already exists")
+	ErrPoolNotFound   = errors.New("capacity pool not found")
+	ErrNoCapacity     = errors.New("no capacity pool available")
+	ErrReservation    = errors.New("capacity reservation failed")
+	ErrStaleReplica   = errors.New("capacity replica fencing token is stale")
+	ErrInvalidReplica = errors.New("invalid capacity replica")
 )
 
 func (p Pool) Validate() error {
@@ -163,11 +165,67 @@ func validateUsage(c Capacity) error {
 }
 
 type Registry struct {
-	mu    sync.RWMutex
-	pools map[string]Pool
+	mu           sync.RWMutex
+	pools        map[string]Pool
+	reservations map[string]Reservation
+	activeOwner  string
+	activeToken  uint64
 }
 
-func NewRegistry() *Registry { return &Registry{pools: make(map[string]Pool)} }
+// Reservation records the exact resources consumed by one runner. ID must be
+// stable across retries; the ledger makes a repeated reserve idempotent.
+type Reservation struct {
+	ID           string `json:"id"`
+	PoolID       string `json:"pool_id"`
+	Owner        string `json:"owner"`
+	FencingToken uint64 `json:"fencing_token"`
+	CPU          int    `json:"cpu"`
+	MemoryGB     int    `json:"memory_gb"`
+	GPU          int    `json:"gpu"`
+}
+
+// ReservationEvidence is a deterministic, redaction-free recovery snapshot
+// suitable for local validation and operator evidence.
+type ReservationEvidence struct {
+	ActiveOwner  string        `json:"active_owner"`
+	ActiveToken  uint64        `json:"active_token"`
+	Reservations []Reservation `json:"reservations"`
+}
+
+func NewRegistry() *Registry {
+	return &Registry{pools: make(map[string]Pool), reservations: make(map[string]Reservation)}
+}
+
+// Replica is a controller view backed by the registry's shared reservation
+// ledger. A newer fencing token invalidates every older replica.
+type Replica struct {
+	registry *Registry
+	owner    string
+	token    uint64
+}
+
+func NewReplica(registry *Registry, owner string, token uint64) (*Replica, error) {
+	if registry == nil || strings.TrimSpace(owner) == "" || token == 0 {
+		return nil, ErrInvalidReplica
+	}
+	registry.mu.Lock()
+	if token > registry.activeToken {
+		registry.activeToken = token
+		registry.activeOwner = owner
+	}
+	registry.mu.Unlock()
+	return &Replica{registry: registry, owner: owner, token: token}, nil
+}
+
+func (r *Replica) fencedLocked() error {
+	if r == nil || r.registry == nil || r.token == 0 || r.owner == "" {
+		return ErrInvalidReplica
+	}
+	if r.token != r.registry.activeToken || r.owner != r.registry.activeOwner {
+		return ErrStaleReplica
+	}
+	return nil
+}
 
 func (r *Registry) Register(pool Pool) error {
 	if err := pool.Validate(); err != nil {
@@ -331,6 +389,82 @@ func (r *Registry) Reserve(id string, cpu, memoryGB, gpu int) error {
 	p.Capacity.UsedGPU += gpu
 	r.pools[id] = p
 	return nil
+}
+
+// ReserveFenced consumes capacity through a replica lease. The reservation ID
+// provides retry idempotency and prevents a failover from double-counting work.
+func (r *Replica) ReserveFenced(reservationID, poolID string, cpu, memoryGB, gpu int) error {
+	if r == nil || r.registry == nil || strings.TrimSpace(reservationID) == "" || strings.TrimSpace(poolID) == "" || cpu < 0 || memoryGB < 0 || gpu < 0 {
+		return ErrReservation
+	}
+	r.registry.mu.Lock()
+	defer r.registry.mu.Unlock()
+	if err := r.fencedLocked(); err != nil {
+		return err
+	}
+	if existing, ok := r.registry.reservations[reservationID]; ok {
+		if existing.Owner == r.owner && existing.FencingToken == r.token && existing.PoolID == poolID && existing.CPU == cpu && existing.MemoryGB == memoryGB && existing.GPU == gpu {
+			return nil
+		}
+		return ErrReservation
+	}
+	p, ok := r.registry.pools[poolID]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrPoolNotFound, poolID)
+	}
+	if p.Availability != Available || !fits(p.Capacity, cpu, memoryGB, gpu) {
+		return fmt.Errorf("%w: %s", ErrNoCapacity, poolID)
+	}
+	p.Capacity.UsedRunners++
+	p.Capacity.UsedCPU += cpu
+	p.Capacity.UsedMemoryGB += memoryGB
+	p.Capacity.UsedGPU += gpu
+	r.registry.pools[poolID] = p
+	if r.registry.reservations == nil {
+		r.registry.reservations = make(map[string]Reservation)
+	}
+	r.registry.reservations[reservationID] = Reservation{ID: reservationID, PoolID: poolID, Owner: r.owner, FencingToken: r.token, CPU: cpu, MemoryGB: memoryGB, GPU: gpu}
+	return nil
+}
+
+// ReleaseFenced returns exactly one recorded reservation. A stale replica
+// cannot release capacity after a newer owner has taken over.
+func (r *Replica) ReleaseFenced(reservationID string) error {
+	if strings.TrimSpace(reservationID) == "" {
+		return ErrReservation
+	}
+	r.registry.mu.Lock()
+	defer r.registry.mu.Unlock()
+	if err := r.fencedLocked(); err != nil {
+		return err
+	}
+	reservation, ok := r.registry.reservations[reservationID]
+	if !ok {
+		return nil
+	}
+	p, ok := r.registry.pools[reservation.PoolID]
+	if !ok || p.Capacity.UsedRunners < 1 || p.Capacity.UsedCPU < reservation.CPU || p.Capacity.UsedMemoryGB < reservation.MemoryGB || p.Capacity.UsedGPU < reservation.GPU {
+		return ErrReservation
+	}
+	p.Capacity.UsedRunners--
+	p.Capacity.UsedCPU -= reservation.CPU
+	p.Capacity.UsedMemoryGB -= reservation.MemoryGB
+	p.Capacity.UsedGPU -= reservation.GPU
+	r.registry.pools[reservation.PoolID] = p
+	delete(r.registry.reservations, reservationID)
+	return nil
+}
+
+// Evidence returns a stable snapshot for recovery validation.
+func (r *Registry) Evidence() ReservationEvidence {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	reservations := make([]Reservation, 0, len(r.reservations))
+	for _, reservation := range r.reservations {
+		reservations = append(reservations, reservation)
+	}
+	sort.Slice(reservations, func(i, j int) bool { return reservations[i].ID < reservations[j].ID })
+	return ReservationEvidence{ActiveOwner: r.activeOwner, ActiveToken: r.activeToken, Reservations: reservations}
 }
 
 // Release returns capacity. Releasing more than currently reserved is rejected.

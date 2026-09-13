@@ -16,6 +16,7 @@ The mandatory validation:
 - verifies the runtime user is UID/GID `65532:65532`;
 - verifies `8080/tcp` is exposed;
 - verifies the controller entrypoint is `/usr/local/bin/runner-controller`;
+- verifies the image is `linux/amd64` and rejects a writable root filesystem;
 - scans the image filesystem for common secret files, credentials, private
   keys, and JIT configuration files.
 

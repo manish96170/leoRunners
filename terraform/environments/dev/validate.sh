@@ -12,6 +12,9 @@ done
 grep -Fq 'source = "../../modules/controller-state"' main.tf || { echo 'controller-state module is not composed' >&2; exit 2; }
 grep -Fq 'source = "../../modules/controller-iam"' main.tf || { echo 'controller-iam module is not composed' >&2; exit 2; }
 grep -Fq 'source = "../../modules/runner-runtime"' main.tf || { echo 'runner-runtime module is not composed' >&2; exit 2; }
+grep -Fq 'source = "../../modules/observability"' main.tf || { echo 'optional observability module is not composed' >&2; exit 2; }
+grep -Fq 'count  = var.enable_observability ? 1 : 0' main.tf || { echo 'observability module is not explicitly opt-in' >&2; exit 2; }
+grep -Fq 'default     = false' variables.tf || { echo 'optional observability must default to false' >&2; exit 2; }
 grep -Fq 'controller_generated_policy_json' variables.tf || { echo 'reviewed policy input is missing' >&2; exit 2; }
 grep -Fq 'nullable    = false' variables.tf || { echo 'required policy must not be nullable' >&2; exit 2; }
 grep -Fq 'init -backend=false' README.md || { echo 'backend-disabled workflow is missing' >&2; exit 2; }
