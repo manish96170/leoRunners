@@ -1,0 +1,57 @@
+apiVersion: workloads.leorunners.io/v1
+kind: WorkloadManifest
+metadata:
+  name: reference-multi-runtime
+  version: 1.0.0
+  description: Optional capability inventory for evidence-driven runner selection.
+  source:
+    repository: replace-with-real-repository
+    revision: replace-with-commit-sha
+    inspectedAt: replace-with-utc-timestamp
+spec:
+  # Providers map these generic hints to cloud-specific resources.
+  runner:
+    operatingSystem: linux
+    architecture: x86_64
+    cpu: 4
+    memoryGB: 8
+    diskGB: 40
+    dockerRequired: false
+    imageProfile: base-linux-x64
+  # All entries are optional until repository evidence changes their state.
+  capabilities:
+    - {id: node, category: runtime, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: javascript, category: language, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: react, category: framework, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: redux, category: framework, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: serverless-framework, category: infrastructure, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: appsync-graphql, category: cloud-service, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: lambda, category: cloud-service, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: sqs, category: cloud-service, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: dynamodb, category: cloud-service, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: s3, category: cloud-service, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: terraform, category: infrastructure, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: vtl, category: language, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: cypress, category: testing, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: vitest, category: testing, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: biome, category: quality, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: eslint, category: quality, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: typescript, category: language-tooling, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: docker, category: build, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: rust, category: runtime, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: go, category: runtime, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+    - {id: aws-cli, category: cloud-tooling, enabled: false, required: false, version: null, evidence: {status: absent, sources: []}}
+  caches:
+    - {id: npm, enabled: false, required: false, mode: observe-only, evidence: {status: absent, sources: []}, measurements: {hitRate: null, restoreDurationMs: null, saveDurationMs: null, sizeBytes: null, invalidationReason: null}}
+    - {id: pnpm, enabled: false, required: false, mode: observe-only, evidence: {status: absent, sources: []}, measurements: {hitRate: null, restoreDurationMs: null, saveDurationMs: null, invalidationReason: null}}
+    - {id: yarn, enabled: false, required: false, mode: observe-only, evidence: {status: absent, sources: []}, measurements: {hitRate: null, restoreDurationMs: null, saveDurationMs: null, invalidationReason: null}}
+    - {id: cargo, enabled: false, required: false, mode: observe-only, evidence: {status: absent, sources: []}, measurements: {hitRate: null, restoreDurationMs: null, saveDurationMs: null, invalidationReason: null}}
+    - {id: go-modules, enabled: false, required: false, mode: observe-only, evidence: {status: absent, sources: []}, measurements: {hitRate: null, restoreDurationMs: null, saveDurationMs: null, invalidationReason: null}}
+    - {id: docker-layers, enabled: false, required: false, mode: observe-only, evidence: {status: absent, sources: []}, measurements: {hitRate: null, restoreDurationMs: null, saveDurationMs: null, invalidationReason: null}}
+    - {id: terraform, enabled: false, required: false, mode: observe-only, evidence: {status: absent, sources: []}, measurements: {hitRate: null, restoreDurationMs: null, saveDurationMs: null, invalidationReason: null}}
+  validation:
+    status: pending
+    repositoryRevision: null
+    observedCommands: []
+    gates: {manifestSchema: pending, toolSmokeTest: pending, workloadExecution: pending, cacheMeasurement: pending, artifactAndCleanup: pending}
+    telemetry: {queueTimeMs: null, schedulingTimeMs: null, provisioningTimeMs: null, bootTimeMs: null, registrationTimeMs: null, readyTimeMs: null, jobStartTimeMs: null, checkoutTimeMs: null, dependencyInstallTimeMs: null, buildTimeMs: null, testTimeMs: null, cypressTimeMs: null, dockerTimeMs: null, cleanupTimeMs: null, totalLifecycleTimeMs: null}

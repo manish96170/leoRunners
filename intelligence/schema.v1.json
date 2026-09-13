@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leorunners.invalid/schemas/intelligence.v1.json",
+  "title": "LeoRunners Intelligence v1 document envelope",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "intelligence.leorunners.io/v1"},
+    "kind": {"enum": ["IntelligenceConfig", "FailureAnalysisEvent"]},
+    "metadata": {"type": "object"},
+    "spec": {"type": "object"}
+  },
+  "additionalProperties": false
+}

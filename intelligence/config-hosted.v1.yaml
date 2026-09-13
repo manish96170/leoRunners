@@ -1,0 +1,40 @@
+apiVersion: intelligence.leorunners.io/v1
+kind: IntelligenceConfig
+metadata:
+  name: hosted-approved
+  version: 1.0.0
+spec:
+  enabled: true
+  provider:
+    id: hosted-example
+    mode: hosted
+    endpoint: https://analysis.example.invalid/v1/analyze
+    model: failure-analysis-hosted-v1
+    region: eu-west-1
+    timeout_seconds: 8
+  consent:
+    scope: tenant-failure-analysis-eu
+    approved: true
+  triggers:
+    - job_failed
+    - repeated_failure
+  input:
+    allowed_fields:
+      - failure_class
+      - exit_code
+      - lifecycle_phase
+      - runner_profile
+      - redacted_excerpt
+    max_excerpt_bytes: 1024
+    redact_before_persist: true
+  retention:
+    event_hours: 72
+    evidence_hours: 6
+  action_policy:
+    version: deterministic.v1
+    autonomous_actions: false
+    allowed_actions:
+      - inspect_image
+      - open_incident
+      - none
+    minimum_confidence: 0.90

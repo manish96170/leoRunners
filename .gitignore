@@ -1,0 +1,29 @@
+.DS_Store
+
+# Local state, plans, credentials, and environment files
+.env
+.env.*
+*.tfvars
+!variables.example.tfvars
+!terraform.tfvars.example
+*.tfplan
+*.tfstate
+*.tfstate.*
+*.pem
+*.key
+*.crt
+*.pkrvars.hcl
+!example.pkrvars.hcl
+
+# Generated tool/build output
+.terraform/
+manifest.json
+bin/
+dist/
+coverage.out
+*.test
+runner-controller
+security-validation
+workload-preflight
+workload-validation
+benchmark-compare

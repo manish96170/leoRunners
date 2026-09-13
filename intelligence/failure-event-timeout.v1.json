@@ -1,0 +1,35 @@
+{
+  "apiVersion": "intelligence.leorunners.io/v1",
+  "kind": "FailureAnalysisEvent",
+  "metadata": {
+    "event_id": "evt_fixture_timeout_001",
+    "created_at": "2026-09-13T10:05:00Z",
+    "tenant_id": "tenant-fixture-a",
+    "job_id": "job-fixture-002",
+    "policy_version": "deterministic.v1"
+  },
+  "spec": {
+    "trigger": "job_timed_out",
+    "failure_class": "lifecycle_timeout",
+    "exit_code": null,
+    "lifecycle_phase": "registration",
+    "runner_profile": "base-linux-x64",
+    "redaction": {
+      "status": "complete",
+      "ruleset": "redact-v1",
+      "redacted_fields": ["authorization", "token", "environment", "workspace_path"]
+    },
+    "evidence": {
+      "excerpt": "registration readiness deadline exceeded; instance identifier omitted",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "bytes": 73,
+      "source": "controller-event-redacted"
+    },
+    "proposed_action": {
+      "action": "inspect_image",
+      "confidence": 0.91,
+      "reason_code": "registration_timeout",
+      "autonomous": false
+    }
+  }
+}

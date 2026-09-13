@@ -1,0 +1,46 @@
+{
+  "schema_version": "phase-7.v1",
+  "record_id": "candidate-linux-x64-001",
+  "role": "candidate",
+  "comparison": { "comparison_id": "phase-7-sample-001", "pair_key": "checkout-build|linux-x64|us-east-1|20260913" },
+  "provenance": {
+    "collected_at": "2026-09-13T10:15:00Z",
+    "collector": "tools/benchmark",
+    "collector_version": "phase-5.v1",
+    "source": "offline-fixture",
+    "evidence_level": "fixture",
+    "notes": "Illustrative offline record; not a cloud cost claim."
+  },
+  "identity": {
+    "workload_id": "checkout-build",
+    "workload_version": "2026.09.13",
+    "workload_commit": "0123456789abcdef0123456789abcdef01234567",
+    "image_id": "ami-candidate-linux-x64-v2",
+    "image_digest": "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+    "region": "us-east-1",
+    "architecture": "amd64",
+    "runner_profile": "base-linux-x64"
+  },
+  "timing": {
+    "unit": "milliseconds",
+    "phases": [
+      { "name": "queue_to_dispatch", "duration_ms": 1200, "status": "measured" },
+      { "name": "provision", "duration_ms": 26000, "status": "measured" },
+      { "name": "boot", "duration_ms": 29000, "status": "measured" },
+      { "name": "registration", "duration_ms": 5000, "status": "measured" },
+      { "name": "job_execution", "duration_ms": 85000, "status": "measured" },
+      { "name": "cleanup", "duration_ms": 8000, "status": "measured" },
+      { "name": "total", "duration_ms": 154200, "status": "measured" }
+    ],
+    "total_ms": 154200
+  },
+  "cost": {
+    "currency": "USD",
+    "compute_usd": 0.0037,
+    "storage_usd": 0.0001,
+    "network_usd": 0.0000,
+    "total_usd": 0.0038,
+    "pricing_source": "fixture"
+  },
+  "result": { "status": "passed", "exit_code": 0, "reproducible": true }
+}

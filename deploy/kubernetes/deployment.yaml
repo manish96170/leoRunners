@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: leo-runners-controller
+  labels:
+    app.kubernetes.io/name: leo-runners-controller
+    app.kubernetes.io/part-of: ephemeral-ci
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: leo-runners-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: leo-runners-controller
+        app.kubernetes.io/part-of: ephemeral-ci
+    spec:
+      serviceAccountName: leo-runners-controller
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: controller
+          image: leo-runners/controller
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: leo-runners-controller
+          env:
+            - name: GITHUB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: leo-runners-controller
+                  key: GITHUB_WEBHOOK_SECRET
+                  optional: false
+            - name: GITHUB_APP_INSTALLATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: leo-runners-controller
+                  key: GITHUB_APP_INSTALLATION_TOKEN
+                  optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/leo-runners
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: leo-runners-state
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,258 @@
+apiVersion: security.leorunners.io/v1
+kind: SecurityPolicy
+metadata:
+  name: ephemeral-runner-default
+  version: 1.0.0
+  description: Fail-closed security contract for ephemeral CI runners.
+spec:
+  enabled: true
+  defaultDecision: deny
+  schedulerCriticalDependency: true
+  mutateSecurityControlsAutomatically: false
+  policyVersionRequiredInEvidence: true
+  forkIsolation:
+    classifyBeforeScheduling: true
+    sourceCodeIsUntrustedByDefault: true
+    forkPullRequest:
+      event: pull_request
+      trustBoundary: untrusted-fork
+      allowRepositorySecrets: false
+      allowEnvironmentSecrets: false
+      allowControllerCredentials: false
+      allowCloudCredentials: false
+      allowTrustedCache: false
+      allowCustomerNetwork: false
+      allowPrivilegedContainers: false
+      allowPullRequestTargetShortcut: false
+      separateCapacityPoolRequired: true
+      separateNetworkProfileRequired: true
+    trustedRepository:
+      explicitApprovalRequired: true
+      requireProtectedBranchOrEnvironment: true
+      secretsRequireOwnerApproval: true
+      sharedCacheRequiresSameTrustBoundary: true
+  identity:
+    controller:
+      credentialSource: workload-identity-or-instance-profile
+      longLivedAccessKeys: false
+      githubCredential: app-installation-token
+      githubCredentialScope: repository-jit-and-webhook-operations
+      stateAccess: controller-owned-table-only
+      mayPassRole: named-runner-role-only
+      mayChangeSecurityControls: false
+    runner:
+      credentialSource: workload-identity
+      controllerCredentials: false
+      staticCloudKeys: false
+      staticGitHubTokens: false
+      iamPolicyMutation: false
+      arbitraryRoleAssumption: false
+      stateTableAccess: false
+      metadataService:
+        aws: imdsv2-required
+        gcp: restricted-metadata-scope
+    oidc:
+      enabled: true
+      issuer: https://token.actions.githubusercontent.com
+      requiredClaims: [iss, aud, sub, repository, repository_id, workflow, ref]
+      audience:
+        aws: sts.amazonaws.com
+        gcp: workload-identity-provider-specific
+      subject:
+        mode: exact-or-reviewed-immutable
+        allowBareWildcard: false
+        allowOrganizationWildcard: false
+        allowRepositoryWildcard: false
+        requireOwnerApprovalForPattern: true
+      session:
+        maxDurationSeconds: 3600
+        requirePerJobExchange: true
+  jit:
+    sourceField: encoded_jit_config
+    singleUse: true
+    generatedImmediatelyBeforeProvisioning: true
+    delivery: protected-file-or-file-descriptor
+    maxLifetimeSeconds: 900
+    persistInState: false
+    persistInProviderMetadata: false
+    persistInTags: false
+    persistInLogs: false
+    persistInMetrics: false
+    persistInTraces: false
+    persistInUserDataLogs: false
+    persistInCommandArguments: false
+    persistInImage: false
+    eraseAfterBootstrap: true
+    failedProvisioningMustCleanup: true
+  iam:
+    controllerPolicy:
+      leastPrivilegeRequired: true
+      requireNamedResources: true
+      denyWildcardPassRole: true
+      denyUnrestrictedAssumeRole: true
+      denySecurityPolicyMutation: true
+      denyNetworkMutation: true
+    runnerPolicy:
+      leastPrivilegeRequired: true
+      allowIAMMutation: false
+      allowPassRole: false
+      allowNetworkMutation: false
+      allowStateTableRead: false
+      requireResourceScopedActions: true
+  network:
+    subnet: private-preferred
+    requireNoPublicIPByDefault: true
+    inbound:
+      defaultAction: deny
+      allowInternet: false
+      allowSSH: false
+      allowRDP: false
+      allowRunnerListenerPorts: false
+    egress:
+      mode: approved-destinations
+      requireTLS: true
+      failClosedForUnknownDestination: true
+      allowedPorts: [443]
+      allowAllIPv4: false
+      allowAllIPv6: false
+    aws:
+      requireIMDSv2: true
+      allowMetadataFromWorkload: false
+    gcp:
+      restrictMetadataServer: true
+    forkBoundary:
+      separateFromTrusted: true
+      customerNetworkAccess: false
+      trustedCacheAccess: false
+  containers:
+    default:
+      runAsNonRoot: true
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      dropCapabilities: [ALL]
+      addCapabilities: []
+      privileged: false
+      hostPID: false
+      hostNetwork: false
+      hostIPC: false
+      hostPathMounts: false
+      deviceMappings: false
+      dockerSocketMount: false
+      hostUserNamespace: false
+    docker:
+      allowed: false
+      rootlessPreferred: true
+      daemonSocketAccess: false
+      privilegedMode: false
+      untrustedForksMayUse: false
+      exception:
+        requiresOwner: true
+        requiresReason: true
+        requiresExpiry: true
+        requiresImageDigest: true
+        requiresRollbackEvidence: true
+  imageSecurity:
+    immutableDigestRequired: true
+    provenanceRequired: true
+    scanBeforePromotion: true
+    scanners:
+      vulnerability: required
+      dependency: required
+      secret: required
+      license: required
+    failOn:
+      criticalVulnerability: true
+      embeddedCredential: true
+      unverifiableProvenance: true
+      expiredBaseImage: true
+    forbiddenImageContent:
+      - github-pat
+      - github-app-private-key
+      - encoded-jit-config
+      - aws-access-key
+      - gcp-service-account-key
+      - ssh-private-key
+      - customer-secret
+  ai:
+    enabledByDefault: false
+    boundary: advisory-only
+    receivesRedactedInputOnly: true
+    mayClassifyFailure: true
+    mayExplainFailure: true
+    mayRecommendHumanReview: true
+    mayProvision: false
+    mayTerminate: false
+    mayRetry: false
+    mayRerun: false
+    mayCancel: false
+    mayGrantCredentials: false
+    mayChangeIAM: false
+    mayChangeNetwork: false
+    mayApproveException: false
+    mayOverridePolicy: false
+  exceptions:
+    defaultDecision: deny
+    requiredFields: [owner, reason, createdAt, expiresAt, evidenceReference]
+    maxDurationDays: 30
+    forkPolicyCanNeverBeOverriddenByAI: true
+    expiredExceptionIsDenied: true
+    untrustedForkPrivilegeExceptionAllowed: false
+  evidence:
+    appendOnly: true
+    requireCorrelationID: true
+    requiredFields:
+      - policy-version
+      - workload-revision
+      - repository-fingerprint
+      - workflow-fingerprint
+      - event-type
+      - trust-boundary
+      - provider
+      - region-or-zone
+      - image-digest
+      - network-profile
+      - decision
+      - reason-code
+      - actor
+      - timestamps
+      - exception-reference
+      - cleanup-result
+    fingerprints:
+      repository: sha256
+      workflow: sha256
+      private-hostname: sha256
+    redact:
+      - credentials
+      - authorization-headers
+      - encoded-jit-config
+      - webhook-secret
+      - user-data
+      - environment-values
+      - signed-urls
+      - customer-payloads
+      - raw-workflow-logs
+      - private-hostnames
+    retainRawPayloads: false
+    retainSecretShapedStrings: false
+    retentionDays: 365
+    restrictedAccess: true
+    tamperEvidence: content-hash
+  incidentResponse:
+    onSuspectedCompromise:
+      stopAssignmentsForBoundary: true
+      revokeShortLivedCredentials: true
+      terminateAffectedRunners: true
+      invalidateCacheNamespace: true
+      preserveRedactedEvidence: true
+      resumeRequiresHumanApproval: true
+    automaticCrossAccountChanges: false
+    automaticIAMChanges: false
+    automaticNetworkChanges: false
+  rollout:
+    requireOfflineValidation: true
+    requireSecurityReview: true
+    requirePinnedImageDigest: true
+    requireScanEvidence: true
+    requireReadOnlyCloudPreflight: true
+    requireSingleApprovedWorkload: true
+    requireCleanupEvidence: true

@@ -1,0 +1,130 @@
+apiVersion: cache.leorunners.io/v1
+kind: CachePolicy
+metadata:
+  name: ephemeral-runner-default
+  version: 1.0.0
+  description: Observe-only cache contract for ephemeral CI runners.
+spec:
+  enabled: true
+  mode: observe-only
+  schedulerCriticalDependency: false
+  failOpenOnBackendError: true
+  key:
+    algorithm: sha256
+    include:
+      - tenant-boundary
+      - repository-scope
+      - ecosystem
+      - lockfile-or-manifest-digest
+      - toolchain-digest
+      - operating-system
+      - architecture
+      - cache-schema
+    exclude:
+      - credentials
+      - tokens
+      - environment-values
+      - raw-branch-name
+      - raw-repository-url
+  invalidation:
+    onDependencyInputChange: true
+    onToolchainChange: true
+    onImageChange: true
+    onPlatformChange: true
+    onTrustBoundaryChange: true
+    onSchemaChange: true
+    onExplicitPurge: true
+    onRestoreIntegrityFailure: true
+    onExpiry: true
+  ecosystems:
+    - id: npm
+      enabled: false
+      required: false
+      mode: observe-only
+      owner: platform
+      evidence: {status: pending, sources: []}
+    - id: pnpm
+      enabled: false
+      required: false
+      mode: observe-only
+      owner: platform
+      evidence: {status: pending, sources: []}
+    - id: yarn
+      enabled: false
+      required: false
+      mode: observe-only
+      owner: platform
+      evidence: {status: pending, sources: []}
+    - id: cargo
+      enabled: false
+      required: false
+      mode: observe-only
+      owner: platform
+      evidence: {status: pending, sources: []}
+    - id: go-modules
+      enabled: false
+      required: false
+      mode: observe-only
+      owner: platform
+      evidence: {status: pending, sources: []}
+    - id: docker-layers
+      enabled: false
+      required: false
+      mode: observe-only
+      owner: platform
+      evidence: {status: pending, sources: []}
+    - id: terraform
+      enabled: false
+      required: false
+      mode: observe-only
+      owner: platform
+      evidence: {status: pending, sources: []}
+  limits:
+    maxObjectSizeBytes: 1073741824
+    maxRestoreDurationMs: 30000
+    maxSaveDurationMs: 30000
+    maxRetentionDays: 14
+    maxMultipartUploadAgeDays: 1
+  telemetry:
+    emitEvents: true
+    dimensions:
+      - ecosystem
+      - mode
+      - outcome
+      - provider
+      - region
+      - architecture
+    fields:
+      - hit-or-miss
+      - restore-duration-ms
+      - save-duration-ms
+      - size-bytes
+      - invalidation-reason
+    redact:
+      - raw-cache-key
+      - object-path
+      - object-url
+      - authorization-header
+      - token
+      - credential
+      - jit-config
+  s3:
+    enabled: false
+    bucket: null
+    prefixTemplate: tenant/{tenant_id}/repository/{repository_id}/ecosystem/{ecosystem}/
+    blockPublicAccess: true
+    requireTLS: true
+    encryption: SSE-S3
+    customerManagedKMSKey: null
+    versioning: false
+    expireAfterDays: 14
+    expireNoncurrentAfterDays: 7
+    abortMultipartAfterDays: 1
+    separateArtifactPolicy: true
+  rollout:
+    stage: observe-only
+    approvedRepositories: []
+    approvedTrustBoundaries: []
+    requireOwnerApprovalToEnable: true
+    requireRepeatedBaseline: true
+    automaticCrossAccountChanges: false

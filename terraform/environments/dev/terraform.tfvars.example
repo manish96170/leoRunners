@@ -1,0 +1,18 @@
+aws_region         = "us-east-1"
+state_table_name   = "leo-runners-dev-state"
+controller_role_name = "leo-runners-dev-controller"
+runner_role_name     = "leo-runners-dev-runner"
+
+controller_trusted_service_principals = ["ec2.amazonaws.com"]
+
+# Required. Replace with the exact JSON from an independently generated,
+# reviewed iam-policy-autopilot artifact. Do not paste credentials here.
+controller_generated_policy_json = file("/absolute/path/to/reviewed-controller-policy.json")
+
+enable_point_in_time_recovery = true
+enable_deletion_protection    = true
+enable_runner_ssm             = false
+
+tags = {
+  owner = "platform"
+}
