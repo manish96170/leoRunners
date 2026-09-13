@@ -1,6 +1,6 @@
 # Plan
 
-## Current milestone: Phase 58 AWS provider validation
+## Current milestone: Phase 61 controlled workload validation
 
 Status: implementation complete; approved live cloud validation remains operator- and environment-gated
 
@@ -191,6 +191,15 @@ The specification requires investigation and architecture documentation before r
 - Added independent AWS provider contract validation, mocked lifecycle
   regressions, pinned launch inputs, readiness/timeout checks, and a guarded
   live-EC2 procedure.
+- Added independent GCP provider contract validation, mocked lifecycle
+  regressions, project/zone/template checks, readiness/timeout checks, and a
+  guarded live-GCP procedure.
+- Added fixed-commit workload intake contracts, offline manifest derivation,
+  secret/floating-ref/command-boundary rejection, and controlled-validation
+  handoff documentation.
+- Added controlled workload execution contracts and a bounded detached-worktree
+  runner with command allowlists, timeout/output limits, network refusal,
+  redaction, and atomic owner-only evidence.
 
 ### Next
 

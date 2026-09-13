@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leorunners.io/schemas/workload-intake.v1.json",
+  "title": "Leo Runners Workload Intake",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "workload-intake.leorunners.io/v1" },
+    "kind": { "const": "WorkloadIntake" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "workload", "provenance", "toolRequirements", "observations", "redaction", "comparability"],
+      "properties": {
+        "repository": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url", "commit", "workflow", "workflowDigest"],
+          "properties": {
+            "url": { "type": "string", "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+            "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "workflow": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9_.@/-]+\\.(?:yml|yaml)$" },
+            "workflowDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          }
+        },
+        "workload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "manifestPath", "manifestDigest", "command", "commandDigest", "shell"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$" },
+            "manifestPath": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\s]+$" },
+            "manifestDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "command": { "type": "string", "minLength": 1, "maxLength": 240 },
+            "commandDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "shell": { "enum": ["bash", "sh", "pwsh"] }
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "inspectedAt", "submittedBy", "approval"],
+          "properties": {
+            "source": { "enum": ["repository-defined", "controlled-intake", "offline-fixture"] },
+            "inspectedAt": { "type": "string", "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+            "submittedBy": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$" },
+            "approval": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["requestId", "approvedBy", "approvedAt", "expiresAt", "purpose"],
+              "properties": {
+                "requestId": { "type": "string", "pattern": "^req-[a-z0-9][a-z0-9-]{7,63}$" },
+                "approvedBy": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$" },
+                "approvedAt": { "type": "string", "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+                "expiresAt": { "type": "string", "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+                "purpose": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]{2,119}$" }
+              }
+            }
+          }
+        },
+        "toolRequirements": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "version", "source"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._+-]{1,63}$" },
+              "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+              "source": { "enum": ["repository", "approved-image", "system"] }
+            }
+          }
+        },
+        "observations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cache", "network", "security"],
+          "properties": {
+            "cache": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "namespaceObserved", "keysRedacted"],
+              "properties": {
+                "mode": { "enum": ["disabled", "observe-only", "enabled"] },
+                "namespaceObserved": { "type": "boolean" },
+                "keysRedacted": { "type": "boolean" }
+              }
+            },
+            "network": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["egressMode", "endpointsObserved", "externalAccessApproved"],
+              "properties": {
+                "egressMode": { "enum": ["none", "nat", "vpc-endpoint", "hybrid", "approved-proxy"] },
+                "endpointsObserved": { "type": "array", "items": { "type": "string", "maxLength": 128 } },
+                "externalAccessApproved": { "type": "boolean" }
+              }
+            },
+            "security": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["trustClass", "isolationProfile", "capabilitiesObserved"],
+              "properties": {
+                "trustClass": { "enum": ["trusted-branch", "internal-pr", "fork", "untrusted"] },
+                "isolationProfile": { "enum": ["standard", "isolated", "privileged"] },
+                "capabilitiesObserved": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$" } }
+              }
+            }
+          }
+        },
+        "redaction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "secretsScanned", "rawPayloadsExcluded", "identifiersHashed"],
+          "properties": {
+            "status": { "const": "redacted" },
+            "secretsScanned": { "const": true },
+            "rawPayloadsExcluded": { "const": true },
+            "identifiersHashed": { "const": true }
+          }
+        },
+        "comparability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocolId", "comparisonKey", "fixedCommit", "fixedManifestDigest", "fixedCommandDigest"],
+          "properties": {
+            "protocolId": { "type": "string", "pattern": "^workload-intake-[0-9]+$" },
+            "comparisonKey": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$" },
+            "fixedCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "fixedManifestDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "fixedCommandDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          }
+        }
+      }
+    }
+  }
+}

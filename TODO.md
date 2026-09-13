@@ -157,5 +157,8 @@
 - [x] Production activation runbook and abort/retention procedures.
 - [x] Controller cancellation/completion/reaper integration coverage.
 - [x] Independent AWS provider mocked lifecycle and guarded validation harness.
+- [x] Independent GCP provider mocked lifecycle and guarded validation harness.
+- [x] Approved fixed-commit workload intake and redacted manifest derivation.
+- [x] Controlled fixed-commit workload execution with bounded commands and evidence.
 - [ ] Run real read-only AWS/GCP/GitHub preflight.
 - [ ] Run one approved live validation and confirm cleanup.

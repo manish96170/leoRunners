@@ -1,0 +1,17 @@
+{
+  "apiVersion": "gcp-provider.leorunners.io/v1",
+  "kind": "ComputeRunnerProviderContract",
+  "metadata": {"name": "unsafe-scope", "version": "1.0.0"},
+  "spec": {
+    "scope": {"project": "leo-runners-prod", "region": "europe-west1", "zone": "us-central1-a"},
+    "instanceTemplate": {"selfLink": "https://www.googleapis.com/compute/v1/projects/other-project/global/instanceTemplates/runner-v1", "fingerprint": "AbCdEfGh12345678", "versionPinned": true},
+    "ownership": {"managedBy": "leo-runners", "owner": "controller", "ephemeral": true, "requiredLabels": {"leo-runners-managed-by": "leo-runners", "leo-runners-runner-id": "runner-1", "leo-runners-job-id": "job-1", "leo-runners-owner": "controller"}},
+    "serviceAccount": {"email": "runner-agent@leo-runners-prod.iam.gserviceaccount.com", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]},
+    "network": {"network": "projects/other-project/global/networks/leo-runners", "subnetwork": "projects/leo-runners-prod/regions/us-central1/subnetworks/leo-runners", "externalIp": false},
+    "requestIdentity": {"requestIdPresent": true, "requestIdDeterministic": true, "requestIdBounded": true, "format": "run-id"},
+    "readiness": {"readyStatus": "RUNNING", "provisioningStatuses": ["PROVISIONING"], "terminalStatuses": ["TERMINATED"], "statusReadBeforeReady": true},
+    "idempotency": {"deletionIdempotent": true, "notFoundDeletionSucceeds": true, "repeatedRequestSafe": true},
+    "timeouts": {"operationSeconds": 300, "readinessSeconds": 900, "deletionSeconds": 300, "bounded": true},
+    "redaction": {"secretsAbsent": true, "serviceAccountKeyAbsent": true, "reportsRedacted": true}
+  }
+}

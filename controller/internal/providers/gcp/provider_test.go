@@ -34,6 +34,7 @@ type mockInstances struct {
 	insertOperation, deleteOperation *mockOperation
 	insertErr, getErr, deleteErr     error
 	statuses                         []computepb.Instance_Status
+	defaultStatus                    *computepb.Instance_Status
 }
 
 func (m *mockInstances) Insert(_ context.Context, req *computepb.InsertInstanceRequest, _ ...gax.CallOption) (Operation, error) {
@@ -54,6 +55,8 @@ func (m *mockInstances) Get(_ context.Context, req *computepb.GetInstanceRequest
 	status := computepb.Instance_RUNNING
 	if len(m.statuses) > 0 {
 		status, m.statuses = m.statuses[0], m.statuses[1:]
+	} else if m.defaultStatus != nil {
+		status = *m.defaultStatus
 	}
 	return &computepb.Instance{Name: stringPtr(req.Instance), Status: stringPtr(status.String())}, nil
 }
@@ -131,6 +134,35 @@ func TestProvisionWaitsForOperationAndBuildsLabels(t *testing.T) {
 	}
 }
 
+func TestProvisionUsesStableRequestIDForSameAttempt(t *testing.T) {
+	client := &mockInstances{}
+	provider, err := NewWithClient(client, testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.newID = func() (string, error) { return "runner-request-id", nil }
+	spec := providers.RunnerSpec{Metadata: map[string]string{MetadataAttemptKey: "durable-attempt-7"}}
+
+	if _, err := provider.Provision(context.Background(), spec); err != nil {
+		t.Fatal(err)
+	}
+	first := client.insertRequest.GetRequestId()
+	if first == "" {
+		t.Fatal("insert request ID is empty")
+	}
+
+	if _, err := provider.Provision(context.Background(), spec); err != nil {
+		t.Fatal(err)
+	}
+	second := client.insertRequest.GetRequestId()
+	if first != second {
+		t.Fatalf("request IDs differ across retries: %q and %q", first, second)
+	}
+	if len(first) != 36 || strings.ContainsAny(first, "\r\n") {
+		t.Fatalf("request ID is not UUID-shaped: %q", first)
+	}
+}
+
 func TestWaitReadyPollsAndMapsStatuses(t *testing.T) {
 	client := &mockInstances{statuses: []computepb.Instance_Status{computepb.Instance_PROVISIONING, computepb.Instance_STAGING, computepb.Instance_RUNNING}}
 	provider, err := NewWithClient(client, testConfig())
@@ -142,6 +174,30 @@ func TestWaitReadyPollsAndMapsStatuses(t *testing.T) {
 	}
 	if len(client.getRequests) != 3 {
 		t.Fatalf("Get calls = %d, want 3", len(client.getRequests))
+	}
+}
+
+func TestWaitReadyReturnsBoundedTimeoutForPendingInstance(t *testing.T) {
+	pending := computepb.Instance_PROVISIONING
+	client := &mockInstances{defaultStatus: &pending}
+	config := testConfig()
+	config.PollInterval = time.Millisecond
+	config.ReadyTimeout = 8 * time.Millisecond
+	provider, err := NewWithClient(client, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	started := time.Now()
+	err = provider.WaitReady(context.Background(), providers.RunnerInstance{ProviderID: "runner-pending"})
+	if !errors.Is(err, ErrNotReady) {
+		t.Fatalf("WaitReady() error = %v, want ErrNotReady", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("WaitReady exceeded bounded test duration: %s", elapsed)
+	}
+	if len(client.getRequests) < 2 {
+		t.Fatalf("Get calls = %d, want repeated polling", len(client.getRequests))
 	}
 }
 
@@ -167,6 +223,32 @@ func TestStatusMapsTerminalAndNotFound(t *testing.T) {
 	}
 }
 
+func TestStatusMapsAllLifecycleStates(t *testing.T) {
+	tests := map[computepb.Instance_Status]providers.RunnerStatus{
+		computepb.Instance_PROVISIONING: providers.StatusProvisioning,
+		computepb.Instance_STAGING:      providers.StatusProvisioning,
+		computepb.Instance_RUNNING:      providers.StatusReady,
+		computepb.Instance_STOPPING:     providers.StatusTerminating,
+		computepb.Instance_SUSPENDING:   providers.StatusTerminating,
+		computepb.Instance_TERMINATED:   providers.StatusTerminated,
+		computepb.Instance_SUSPENDED:    providers.StatusFailed,
+		computepb.Instance_REPAIRING:    providers.StatusFailed,
+	}
+	for status, want := range tests {
+		t.Run(status.String(), func(t *testing.T) {
+			client := &mockInstances{statuses: []computepb.Instance_Status{status}}
+			provider, err := NewWithClient(client, testConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := provider.Status(context.Background(), providers.RunnerInstance{ProviderID: "runner-lifecycle"})
+			if err != nil || got != want {
+				t.Fatalf("Status(%s) = %s, %v; want %s", status, got, err, want)
+			}
+		})
+	}
+}
+
 func TestTerminateWaitsAndIsIdempotentForNotFound(t *testing.T) {
 	client := &mockInstances{}
 	provider, err := NewWithClient(client, testConfig())
@@ -186,6 +268,23 @@ func TestTerminateWaitsAndIsIdempotentForNotFound(t *testing.T) {
 	}
 	if err := provider.Terminate(context.Background(), providers.RunnerInstance{ProviderID: "runner-vm"}); err != nil {
 		t.Fatalf("not-found Terminate() = %v", err)
+	}
+}
+
+func TestTerminateCanBeRepeatedAfterNotFound(t *testing.T) {
+	client := &mockInstances{deleteErr: errors.New("instance not found")}
+	provider, err := NewWithClient(client, testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := providers.RunnerInstance{ProviderID: "runner-already-gone"}
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := provider.Terminate(context.Background(), instance); err != nil {
+			t.Fatalf("Terminate() attempt %d error = %v", attempt+1, err)
+		}
+	}
+	if client.deleteRequest == nil || client.deleteRequest.Project != testConfig().Project || client.deleteRequest.Zone != testConfig().Zone {
+		t.Fatalf("unexpected delete request: %+v", client.deleteRequest)
 	}
 }
 

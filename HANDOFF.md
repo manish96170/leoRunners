@@ -73,6 +73,12 @@ The repository is a greenfield Go project. Phase 0 documentation and the Phase 1
   expired-runner reaping paths.
 - Phase 58 adds independent AWS provider validation, mocked regressions, and a
   guarded live-EC2 procedure.
+- Phase 59 adds independent GCP provider validation, mocked regressions, and a
+  guarded live-GCP procedure.
+- Phase 60 adds approved fixed-commit workload intake, offline manifest
+  derivation, and `docs/workload-intake.md`.
+- Phase 61 adds bounded controlled workload execution, evidence validation, and
+  `docs/controlled-workload-validation.md`.
 
 ## Continue here
 

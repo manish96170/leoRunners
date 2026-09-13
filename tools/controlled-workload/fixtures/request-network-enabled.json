@@ -1,0 +1,11 @@
+{
+  "apiVersion": "workload-intake.leorunners.io/v1",
+  "kind": "WorkloadIntake",
+  "metadata": { "name": "network-enabled-example" },
+  "spec": {
+    "repository": { "commit": "0000000000000000000000000000000000000000" },
+    "workload": { "id": "network-example", "command": "go test ./...", "commandDigest": "sha256:placeholder", "shell": "bash" },
+    "observations": { "network": { "egressMode": "nat", "externalAccessApproved": true } },
+    "redaction": { "status": "redacted", "secretsScanned": true, "rawPayloadsExcluded": true }
+  }
+}

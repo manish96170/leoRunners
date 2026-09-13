@@ -1,0 +1,17 @@
+{
+  "apiVersion": "gcp-provider.leorunners.io/v1",
+  "kind": "ComputeRunnerProviderContract",
+  "metadata": {"name": "unsafe", "version": "1.0.0"},
+  "spec": {
+    "scope": {"project": "", "region": "us-central1", "zone": "us-central1-a"},
+    "instanceTemplate": {"selfLink": "*", "fingerprint": "", "versionPinned": false},
+    "ownership": {"managedBy": "", "owner": "", "ephemeral": false, "requiredLabels": {}},
+    "serviceAccount": {"email": "*", "scopes": []},
+    "network": {"network": "*", "subnetwork": "*", "externalIp": true},
+    "requestIdentity": {"requestIdPresent": false, "requestIdDeterministic": false, "requestIdBounded": false, "format": ""},
+    "readiness": {"readyStatus": "", "provisioningStatuses": [], "terminalStatuses": [], "statusReadBeforeReady": false},
+    "idempotency": {"deletionIdempotent": false, "notFoundDeletionSucceeds": false, "repeatedRequestSafe": false},
+    "timeouts": {"operationSeconds": 0, "readinessSeconds": 999999, "deletionSeconds": 0, "bounded": false},
+    "redaction": {"secretsAbsent": false, "serviceAccountKeyAbsent": false, "reportsRedacted": false}
+  }
+}
