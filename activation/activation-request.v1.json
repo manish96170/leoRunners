@@ -1,0 +1,30 @@
+{
+  "apiVersion": "activation.leorunners.io/v1",
+  "kind": "ActivationRequest",
+  "metadata": { "name": "connectivity-smoke", "version": "1.0.0" },
+  "spec": {
+    "request_id": "activation-20260914-001",
+    "requested_at": "2026-09-14T09:00:00Z",
+    "operator": { "id": "operator.manish", "contact": "operator@example.com" },
+    "approver": { "id": "approver.platform", "contact": "approver@example.com" },
+    "target": {
+      "provider": "aws",
+      "account": "123456789012",
+      "project": null,
+      "region": "us-east-1",
+      "repository": "manish96170/leoRunners"
+    },
+    "scope_file": {
+      "path": "validation/scopes/approved.v1.json",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "scopes": ["aws:account:123456789012", "aws:region:us-east-1", "github:repo:manish96170/leoRunners"],
+    "resource_prefix": "leo-activation",
+    "max_resources": 4,
+    "deadline": "2026-09-14T18:00:00Z",
+    "budget": { "currency": "USD", "max_amount": 25.00 },
+    "notification": { "channel": "email", "destination": "platform@example.com" },
+    "rollback_owner": { "id": "rollback.platform", "contact": "rollback@example.com" },
+    "mode": "connectivity"
+  }
+}

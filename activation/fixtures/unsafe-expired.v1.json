@@ -1,0 +1,21 @@
+{
+  "apiVersion": "activation.leorunners.io/v1",
+  "kind": "ActivationRequest",
+  "metadata": { "name": "unsafe-expired", "version": "1.0.0" },
+  "spec": {
+    "request_id": "activation-expired-001",
+    "requested_at": "2026-09-14T09:00:00Z",
+    "operator": { "id": "operator.one", "contact": "operator@example.com" },
+    "approver": { "id": "approver.one", "contact": "approver@example.com" },
+    "target": { "provider": "aws", "account": "123456789012", "project": null, "region": "us-east-1", "repository": "org/repo" },
+    "scope_file": { "path": "scope.json", "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" },
+    "scopes": ["aws:region:us-east-1"],
+    "resource_prefix": "leo-expired",
+    "max_resources": 1,
+    "deadline": "2026-09-14T09:30:00Z",
+    "budget": { "currency": "USD", "max_amount": 1 },
+    "notification": { "channel": "email", "destination": "ops@example.com" },
+    "rollback_owner": { "id": "rollback.one", "contact": "rollback@example.com" },
+    "mode": "read-only"
+  }
+}

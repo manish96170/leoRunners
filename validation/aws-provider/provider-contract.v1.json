@@ -1,0 +1,24 @@
+{
+  "apiVersion": "aws-provider.leorunners.io/v1",
+  "kind": "EC2RunnerProviderContract",
+  "metadata": {"name": "safe-ec2-runner-provider", "version": "1.0.0"},
+  "spec": {
+    "launchTemplate": {"id": "lt-0123456789abcdef0", "version": "7", "versionPinned": true},
+    "metadataOptions": {"httpEndpoint": "enabled", "httpTokens": "required"},
+    "ownership": {
+      "managedBy": "leo-runners", "owner": "controller", "ephemeral": true,
+      "requiredTags": {
+        "leo-runners:managed-by": "leo-runners",
+        "leo-runners:runner-id": "runner-123",
+        "leo-runners:job-id": "job-123",
+        "leo-runners:owner": "controller"
+      }
+    },
+    "instanceProfile": {"arn": "arn:aws:iam::000000000000:instance-profile/leo-runner", "name": ""},
+    "network": {"subnetId": "subnet-0123456789abcdef0", "securityGroupIds": ["sg-0123456789abcdef0"]},
+    "idempotency": {"clientTokenPresent": true, "clientTokenDeterministic": true, "terminationIdempotent": true, "notFoundTerminationSucceeds": true},
+    "readiness": {"readyStatus": "running", "provisioningStatuses": ["pending"], "terminalStatuses": ["terminated", "shutting-down"], "statusReadBeforeReady": true},
+    "timeouts": {"operationSeconds": 300, "readinessSeconds": 600, "terminationSeconds": 120, "bounded": true},
+    "redaction": {"secretsAbsent": true, "jitConfigAbsent": true, "reportsRedacted": true}
+  }
+}

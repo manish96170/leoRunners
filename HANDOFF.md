@@ -65,6 +65,14 @@ The repository is a greenfield Go project. Phase 0 documentation and the Phase 1
 - Phases 46-54 add production config/secrets, GCP/GitHub scope validation,
   AMI and measurement evidence, multi-cloud comparison, artifact security,
   recovery evidence, and the final audit pack.
+- Phase 55 adds the reviewed activation-request contract, read-only preflight
+  handoff wrapper, and `docs/production-activation.md`.
+- Phase 56 reconciles stale TODO entries so remaining work reflects actual
+  environment-gated validation and deployment tasks.
+- Phase 57 adds controller lifecycle integration coverage for cancellation and
+  expired-runner reaping paths.
+- Phase 58 adds independent AWS provider validation, mocked regressions, and a
+  guarded live-EC2 procedure.
 
 ## Continue here
 

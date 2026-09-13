@@ -1,6 +1,6 @@
 # Plan
 
-## Current milestone: Phase 54 final architecture audit
+## Current milestone: Phase 58 AWS provider validation
 
 Status: implementation complete; approved live cloud validation remains operator- and environment-gated
 
@@ -178,6 +178,19 @@ The specification requires investigation and architecture documentation before r
 - Completed Phase 53 disaster-recovery, replay, fencing, reaping, and takeover
   evidence validation.
 - Completed Phase 54 final architecture and production-readiness audit pack.
+- Completed Phase 55 versioned activation requests, owner/approver/scope/deadline
+  validation, and secret/wildcard rejection.
+- Added a read-only production-preflight handoff wrapper that requires the
+  reviewed activation request and scope file, blocks live flags, and emits a
+  redacted PASS/BLOCKED handoff report.
+- Added the Phase 55 production activation runbook.
+- Reconciled stale TODO entries against completed implementation phases and
+  separated offline contracts from genuinely environment-gated work.
+- Added controller integration coverage for cancellation cleanup and expired
+  runner reaping, including durable lease/runner assertions.
+- Added independent AWS provider contract validation, mocked lifecycle
+  regressions, pinned launch inputs, readiness/timeout checks, and a guarded
+  live-EC2 procedure.
 
 ### Next
 

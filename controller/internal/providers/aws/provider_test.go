@@ -16,10 +16,13 @@ import (
 
 type mockEC2 struct {
 	runInput        *ec2.RunInstancesInput
+	runInputs       []*ec2.RunInstancesInput
 	describeInputs  []*ec2.DescribeInstancesInput
 	terminateInput  *ec2.TerminateInstancesInput
+	terminateInputs []*ec2.TerminateInstancesInput
 	runOutput       *ec2.RunInstancesOutput
 	describeOutputs []*ec2.DescribeInstancesOutput
+	describeDefault *ec2.DescribeInstancesOutput
 	runErr          error
 	describeErr     error
 	terminateErr    error
@@ -27,6 +30,7 @@ type mockEC2 struct {
 
 func (m *mockEC2) RunInstances(_ context.Context, input *ec2.RunInstancesInput, _ ...func(*ec2.Options)) (*ec2.RunInstancesOutput, error) {
 	m.runInput = input
+	m.runInputs = append(m.runInputs, input)
 	if m.runErr != nil {
 		return nil, m.runErr
 	}
@@ -42,6 +46,9 @@ func (m *mockEC2) DescribeInstances(_ context.Context, input *ec2.DescribeInstan
 		return nil, m.describeErr
 	}
 	if len(m.describeOutputs) == 0 {
+		if m.describeDefault != nil {
+			return m.describeDefault, nil
+		}
 		return instanceState(types.InstanceStateNameRunning), nil
 	}
 	output := m.describeOutputs[0]
@@ -51,6 +58,7 @@ func (m *mockEC2) DescribeInstances(_ context.Context, input *ec2.DescribeInstan
 
 func (m *mockEC2) TerminateInstances(_ context.Context, input *ec2.TerminateInstancesInput, _ ...func(*ec2.Options)) (*ec2.TerminateInstancesOutput, error) {
 	m.terminateInput = input
+	m.terminateInputs = append(m.terminateInputs, input)
 	return &ec2.TerminateInstancesOutput{}, m.terminateErr
 }
 
@@ -108,6 +116,9 @@ func TestProvisionUsesLaunchTemplateIMDSv2AndOwnershipTags(t *testing.T) {
 	if in.MinCount == nil || in.MaxCount == nil || *in.MinCount != 1 || *in.MaxCount != 1 {
 		t.Fatalf("unexpected counts: %v %v", in.MinCount, in.MaxCount)
 	}
+	if in.LaunchTemplate.Version != nil {
+		t.Fatalf("launch template version = %q, want provider default", awsv2.ToString(in.LaunchTemplate.Version))
+	}
 	if in.MetadataOptions == nil || in.MetadataOptions.HttpTokens != types.HttpTokensStateRequired || in.MetadataOptions.HttpEndpoint != types.InstanceMetadataEndpointStateEnabled {
 		t.Fatalf("IMDSv2 not required: %+v", in.MetadataOptions)
 	}
@@ -122,6 +133,43 @@ func TestProvisionUsesLaunchTemplateIMDSv2AndOwnershipTags(t *testing.T) {
 		if tags[key] != want {
 			t.Errorf("tag %q = %q, want %q", key, tags[key], want)
 		}
+	}
+}
+
+func TestProvisionLaunchRequestContractWithPinnedTemplate(t *testing.T) {
+	client := &mockEC2{}
+	config := testConfig()
+	config.LaunchTemplateID = ""
+	config.LaunchTemplateName = "leo-runner-template"
+	config.LaunchTemplateVersion = "42"
+	config.InstanceType = "m7g.large"
+	config.InstanceProfileARN = "arn:aws:iam::123456789012:instance-profile/runner"
+	config.SubnetID = "subnet-pinned"
+	config.SecurityGroupIDs = []string{"sg-one", "sg-two"}
+	provider, err := New(client, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.newID = func() (string, error) { return "runner-contract", nil }
+	_, err = provider.Provision(context.Background(), providers.RunnerSpec{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := client.runInput
+	if in == nil || in.LaunchTemplate == nil {
+		t.Fatalf("missing launch template request: %+v", in)
+	}
+	if awsv2.ToString(in.LaunchTemplate.LaunchTemplateName) != "leo-runner-template" || awsv2.ToString(in.LaunchTemplate.Version) != "42" {
+		t.Fatalf("unexpected launch template: %+v", in.LaunchTemplate)
+	}
+	if in.LaunchTemplate.LaunchTemplateId != nil {
+		t.Fatal("LaunchTemplateId set when name selector was configured")
+	}
+	if awsv2.ToString(in.SubnetId) != "subnet-pinned" || len(in.SecurityGroupIds) != 2 || awsv2.ToString(in.IamInstanceProfile.Arn) == "" || string(in.InstanceType) != "m7g.large" {
+		t.Fatalf("launch request network/profile/type contract violated: %+v", in)
+	}
+	if in.MinCount == nil || in.MaxCount == nil || *in.MinCount != 1 || *in.MaxCount != 1 {
+		t.Fatalf("counts = %v/%v, want 1/1", in.MinCount, in.MaxCount)
 	}
 }
 
@@ -216,6 +264,30 @@ func TestProviderClientTokenIsStableForAttemptKey(t *testing.T) {
 	}
 }
 
+func TestProvisionUsesSameClientTokenAcrossRetries(t *testing.T) {
+	client := &mockEC2{}
+	provider, err := New(client, testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.newID = func() (string, error) { return "runner-retry", nil }
+	spec := providers.RunnerSpec{Metadata: map[string]string{MetadataProviderAttemptKey: "durable-attempt-9"}}
+	if _, err = provider.Provision(context.Background(), spec); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = provider.Provision(context.Background(), spec); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.runInputs) != 2 {
+		t.Fatalf("RunInstances calls = %d, want 2", len(client.runInputs))
+	}
+	for i, input := range client.runInputs {
+		if awsv2.ToString(input.ClientToken) != awsv2.ToString(client.runInputs[0].ClientToken) {
+			t.Errorf("attempt %d ClientToken = %q, want %q", i, awsv2.ToString(input.ClientToken), awsv2.ToString(client.runInputs[0].ClientToken))
+		}
+	}
+}
+
 func TestWaitReadyPollsUntilRunning(t *testing.T) {
 	client := &mockEC2{describeOutputs: []*ec2.DescribeInstancesOutput{instanceState(types.InstanceStateNamePending), instanceState(types.InstanceStateNameRunning)}}
 	provider, err := New(client, testConfig())
@@ -232,7 +304,7 @@ func TestWaitReadyPollsUntilRunning(t *testing.T) {
 }
 
 func TestWaitReadyHonorsCancellation(t *testing.T) {
-	client := &mockEC2{describeOutputs: []*ec2.DescribeInstancesOutput{instanceState(types.InstanceStateNamePending)}}
+	client := &mockEC2{describeDefault: instanceState(types.InstanceStateNamePending)}
 	config := testConfig()
 	config.PollInterval = time.Hour
 	provider, err := New(client, config)
@@ -243,6 +315,28 @@ func TestWaitReadyHonorsCancellation(t *testing.T) {
 	cancel()
 	if err := provider.WaitReady(ctx, providers.RunnerInstance{ProviderID: "i-123"}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("WaitReady() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestWaitReadyReturnsBoundedTimeoutForPendingInstance(t *testing.T) {
+	client := &mockEC2{describeDefault: instanceState(types.InstanceStateNamePending)}
+	config := testConfig()
+	config.PollInterval = time.Millisecond
+	config.ReadyTimeout = 8 * time.Millisecond
+	provider, err := New(client, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	err = provider.WaitReady(context.Background(), providers.RunnerInstance{ProviderID: "i-pending"})
+	if !errors.Is(err, ErrNotReady) {
+		t.Fatalf("WaitReady() error = %v, want ErrNotReady", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("WaitReady exceeded bounded test duration: %s", elapsed)
+	}
+	if len(client.describeInputs) < 2 {
+		t.Fatalf("DescribeInstances calls = %d, want repeated polling", len(client.describeInputs))
 	}
 }
 
@@ -260,6 +354,30 @@ func TestStatusMapsStoppedAndTerminated(t *testing.T) {
 	}
 }
 
+func TestStatusMapsAllLifecycleStates(t *testing.T) {
+	tests := map[types.InstanceStateName]providers.RunnerStatus{
+		types.InstanceStateNamePending:      providers.StatusProvisioning,
+		types.InstanceStateNameRunning:      providers.StatusReady,
+		types.InstanceStateNameShuttingDown: providers.StatusTerminating,
+		types.InstanceStateNameTerminated:   providers.StatusTerminated,
+		types.InstanceStateNameStopping:     providers.StatusFailed,
+		types.InstanceStateNameStopped:      providers.StatusFailed,
+	}
+	for state, want := range tests {
+		t.Run(string(state), func(t *testing.T) {
+			client := &mockEC2{describeOutputs: []*ec2.DescribeInstancesOutput{instanceState(state)}}
+			provider, err := New(client, testConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := provider.Status(context.Background(), providers.RunnerInstance{ProviderID: "i-lifecycle"})
+			if err != nil || got != want {
+				t.Fatalf("Status(%s) = %s, %v; want %s", state, got, err, want)
+			}
+		})
+	}
+}
+
 func TestTerminateIsIdempotentForNotFound(t *testing.T) {
 	client := &mockEC2{terminateErr: notFoundError{}}
 	provider, err := New(client, testConfig())
@@ -271,6 +389,28 @@ func TestTerminateIsIdempotentForNotFound(t *testing.T) {
 	}
 	if client.terminateInput == nil || len(client.terminateInput.InstanceIds) != 1 || client.terminateInput.InstanceIds[0] != "i-123" {
 		t.Fatalf("unexpected terminate input: %+v", client.terminateInput)
+	}
+}
+
+func TestTerminateCanBeRepeatedAfterNotFound(t *testing.T) {
+	client := &mockEC2{terminateErr: notFoundError{}}
+	provider, err := New(client, testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := providers.RunnerInstance{ProviderID: "i-already-gone"}
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := provider.Terminate(context.Background(), instance); err != nil {
+			t.Fatalf("Terminate() attempt %d error = %v", attempt+1, err)
+		}
+	}
+	if len(client.terminateInputs) != 3 {
+		t.Fatalf("TerminateInstances calls = %d, want 3", len(client.terminateInputs))
+	}
+	for _, input := range client.terminateInputs {
+		if len(input.InstanceIds) != 1 || input.InstanceIds[0] != instance.ProviderID {
+			t.Fatalf("unexpected termination input: %+v", input)
+		}
 	}
 }
 

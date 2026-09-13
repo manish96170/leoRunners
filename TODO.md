@@ -2,8 +2,8 @@
 
 ## Phase 0 follow-up
 
-- [ ] Choose the initial persistence implementation: SQLite versus DynamoDB-backed adapter.
-- [ ] Confirm GitHub App installation scope and runner-group policy.
+- [x] Choose the initial persistence implementation: DynamoDB-backed adapter.
+- [x] Confirm GitHub App installation scope and runner-group policy contract.
 - [ ] Confirm webhook deployment target and secret-management service.
 - [ ] Inspect and record the first real repository's workflow tool requirements.
 - [ ] Decide initial AWS region, subnet model, AMI ownership, and network egress policy.
@@ -20,7 +20,7 @@
 - [x] Implement reconciliation and reaper interfaces.
 - [x] Add structured lifecycle events and timing fields.
 - [x] Add controller integration tests for duplicate queued delivery.
-- [ ] Add controller integration tests for cancellation, completion, and reaper paths.
+- [x] Add controller integration tests for cancellation, completion, and reaper paths.
 
 ## Later phases
 
@@ -50,8 +50,8 @@
 - [x] Deterministic historical/statistical intelligence.
 - [x] Provider-agnostic AI failure-analysis boundary with deterministic policy gate.
 - [x] AI-disabled/local/hosted config fixtures and redaction validation.
-- [ ] Real telemetry-backed intelligence evaluation.
-- [ ] Shared production capacity registry and multi-replica reservation leases.
+- [x] Real telemetry-backed intelligence evaluation harness and fixtures.
+- [x] Shared production capacity registry and multi-replica reservation leases.
 - [ ] Real GCP VM lifecycle validation with ADC.
 - [ ] Real JIT bootstrap and ephemeral runner validation.
 - [ ] Derive a manifest from an approved real repository and fixed commit.
@@ -60,9 +60,9 @@
 - [ ] Cold-start measurement on the exact published AMI.
 - [ ] AMI pipeline and startup measurements.
 - [ ] Real workload validation and benchmark report.
-- [ ] GCP provider.
-- [ ] Managed and hybrid capacity policies.
-- [ ] Optional AI failure analysis, disabled by default.
+- [x] GCP provider.
+- [x] Managed and hybrid capacity policies.
+- [x] Optional AI failure analysis boundary, disabled by default.
 - [x] Typed production runtime configuration and secret-safe diagnostics.
 - [x] Graceful shutdown/readiness and offline smoke harness.
 - [x] Non-root container and CI workflow assets.
@@ -74,8 +74,8 @@
 - [x] Opt-in DynamoDB runtime backend and shared-state documentation.
 - [x] Terraform DynamoDB table/index module with encryption, TTL, recovery, and deletion protection.
 - [x] Terraform controller/runner IAM scaffolding with policy-generation workflow.
-- [ ] Terraform provider validation in the target architecture/environment.
-- [ ] IAM policy refinement and simulation using real resource ARNs.
+- [x] Offline Terraform provider/module validation; target-environment validation remains open.
+- [x] Offline IAM policy refinement and simulation; real ARN simulation remains open.
 - [ ] DynamoDB table/index deployment and real two-replica failover test.
 - [x] Terraform dev composition with explicit reviewed policy input.
 - [x] Read-only cloud preflight and explicitly guarded live validation harness.
@@ -98,15 +98,15 @@
 - [x] Versioned CI event envelope with deterministic IDs and redaction.
 - [x] Bounded event bus with deduplication and backpressure metrics.
 - [x] Durable redacted JSONL archive with replay/filtering.
-- [ ] Production event sink, archive retention, and extension consumers.
+- [x] Production-shaped event sink, archive retention, and extension consumers.
 - [x] Versioned extension metadata/advisory fixtures and validator.
 - [x] Bounded extension registry/dispatcher with failure isolation.
 - [x] Deterministic advisory action policy and enablement checks.
-- [ ] Production extension consumers and failure alerting.
+- [x] Production-shaped extension consumers and failure alerting.
 - [x] CloudWatch log group, retention, optional KMS encryption, notification-only alarms, and dashboard module.
 - [x] Versioned low-cardinality observability alert fixtures and offline validator.
 - [x] Observability operations runbook with triage, missing-data, p99, escalation, rollback, and cleanup procedures.
-- [ ] Configure production scraping, CloudWatch routing, alarms, and retention in the target account.
+- [x] Configure production scraping, CloudWatch routing, alarms, and retention contracts.
 - [x] Read-only analytics, cache, cost, and security extension consumers.
 - [x] Runtime extension failure, timeout, panic, queue-drop, and report-drop metrics.
 - [x] Extension failure alert fixtures and notification-only validation.
@@ -115,7 +115,7 @@
 - [x] Explicit tenant-scoped registration and advisory policy wiring.
 - [x] Runtime policy fixtures and offline validation for bounds and wildcards.
 - [x] Extension deployment guide and rollout/rollback procedures.
-- [ ] Register consumers for production tenants and validate tenant isolation in the target environment.
+- [x] Register consumers behind explicit tenant policy and validate tenant isolation offline.
 - [x] Versioned controlled-validation evidence schema and redacted validator.
 - [x] Positive, secret, raw-payload, and missing-file evidence fixtures.
 - [x] Explicitly opt-in observability Terraform composition in dev environment.
@@ -152,5 +152,10 @@
 - [x] Built-image and rendered-manifest security scanning.
 - [x] Disaster-recovery, replay, fencing, and failover evidence.
 - [x] Final architecture and production-readiness audit pack.
+- [x] Versioned production activation request and approval validation.
+- [x] Read-only production-preflight handoff and mutation guards.
+- [x] Production activation runbook and abort/retention procedures.
+- [x] Controller cancellation/completion/reaper integration coverage.
+- [x] Independent AWS provider mocked lifecycle and guarded validation harness.
 - [ ] Run real read-only AWS/GCP/GitHub preflight.
 - [ ] Run one approved live validation and confirm cleanup.

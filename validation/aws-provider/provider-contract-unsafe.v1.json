@@ -1,0 +1,16 @@
+{
+  "apiVersion": "aws-provider.leorunners.io/v1",
+  "kind": "EC2RunnerProviderContract",
+  "metadata": {"name": "unsafe", "version": "1.0.0"},
+  "spec": {
+    "launchTemplate": {"id": "lt-unsafe", "version": "$Latest", "versionPinned": false},
+    "metadataOptions": {"httpEndpoint": "enabled", "httpTokens": "optional"},
+    "ownership": {"managedBy": "", "owner": "", "requiredTags": {}, "ephemeral": false},
+    "instanceProfile": {"arn": "*", "name": "runner"},
+    "network": {"subnetId": "", "securityGroupIds": ["*"]},
+    "idempotency": {"clientTokenPresent": false, "clientTokenDeterministic": false, "terminationIdempotent": false, "notFoundTerminationSucceeds": false},
+    "readiness": {"readyStatus": "", "provisioningStatuses": [], "terminalStatuses": [], "statusReadBeforeReady": false},
+    "timeouts": {"operationSeconds": 0, "readinessSeconds": 999999, "terminationSeconds": 0, "bounded": false},
+    "redaction": {"secretsAbsent": false, "jitConfigAbsent": false, "reportsRedacted": false, "token": "ghp_example_secret"}
+  }
+}
