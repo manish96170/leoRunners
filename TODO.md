@@ -173,6 +173,7 @@
 - [ ] Approve a real UAT request ID, cleanup deadline, controller/runners
       network scope, and a Terraform plan before a foundation apply.
 - [ ] Add the dedicated CloudFront/ALB/ECS webhook service layer to the UAT
-      composition after approving an ALB origin hostname and ACM certificate.
-      CloudFront-to-ALB HTTP is explicitly out of scope for signed GitHub
-      webhook traffic.
+      composition after approving `infrastructure.getanchor.io` and an ACM
+      certificate. Use the direct HTTPS ALB shared-gateway design in
+      `docs/uat-shared-infrastructure-gateway.md`; CloudFront, Elastic IPs,
+      and reuse of the existing GitNexus MCP deployment are out of scope.

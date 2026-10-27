@@ -91,14 +91,18 @@ Read `docs/phase-1-plan.md`, then extend the current implementation in this orde
 1. Review `terraform/environments/uat-foundation/README.md` and the exact
    foundation plan. It is UAT-only and deliberately creates no public endpoint,
    ECS service/task, EC2 runner, GitHub integration, or workload execution.
-2. Review the policy artifacts generated with `iam-policy-autopilot` from the
+2. Use `docs/uat-shared-infrastructure-gateway.md` as the approved shared
+   gateway direction: create a new direct HTTPS ALB for
+   `infrastructure.getanchor.io`; do not reuse the existing GitNexus MCP
+   deployment or its CloudFront/ALB/ECS/EFS/IAM/secrets lifecycle.
+3. Review the policy artifacts generated with `iam-policy-autopilot` from the
    controller source and Terraform plan. The initial artifacts are not approved
    because they have wildcard-resource warnings; do not attach or upload them.
-3. Obtain a bounded UAT request ID, cleanup deadline, reviewed network scope,
+4. Obtain a bounded UAT request ID, cleanup deadline, reviewed network scope,
    and explicit apply approval. Existing Commerce GitLab runner infrastructure
    is out of scope and must not be reused or modified.
-4. Run the read-only AWS/GCP/GitHub preflight and review target ownership.
-5. Run an approved live validation and validate the redacted evidence package
+5. Run the read-only AWS/GCP/GitHub preflight and review target ownership.
+6. Run an approved live validation and validate the redacted evidence package
    with `tools/evidence-validation/test.sh`; use `--evidence-report` only with
    a single approved AWS or GCP live action. Supply a reviewed `--scope-file`
    and stop on any identity or scope mismatch.
