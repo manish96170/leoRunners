@@ -7,6 +7,16 @@ security groups. It deliberately does **not** create a CloudFront distribution,
 ALB, ECS service/task, Secrets Manager secret, GitHub configuration, runner AMI,
 launch template, or EC2 runner.
 
+## Planned webhook service layer
+
+The later UAT webhook layer is part of this same foundation design and will add
+a dedicated CloudFront distribution, ALB, target group, ECS Fargate service,
+and Secrets Manager references. It remains disabled until review approves an
+ALB origin hostname and an ACM certificate for HTTPS from CloudFront to the
+ALB. CloudFront's `cloudfront.net` certificate is sufficient for GitHub's
+viewer connection, but it does not provide an ALB origin certificate. Do not
+substitute CloudFront-to-ALB HTTP for the approved end-to-end TLS path.
+
 The AWS foundation is generic. Repository-specific runner labels, GitHub runner
 groups, and workflow changes belong in an approved tenant composition and must
 not be applied by this directory.

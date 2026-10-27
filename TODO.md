@@ -172,3 +172,7 @@
       warnings and are not attached or uploaded.
 - [ ] Approve a real UAT request ID, cleanup deadline, controller/runners
       network scope, and a Terraform plan before a foundation apply.
+- [ ] Add the dedicated CloudFront/ALB/ECS webhook service layer to the UAT
+      composition after approving an ALB origin hostname and ACM certificate.
+      CloudFront-to-ALB HTTP is explicitly out of scope for signed GitHub
+      webhook traffic.

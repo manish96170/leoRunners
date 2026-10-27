@@ -210,13 +210,16 @@ The specification requires investigation and architecture documentation before r
 1. Review the UAT-only foundation Terraform plan in
    `terraform/environments/uat-foundation/`; it creates no public ingress,
    controller task, runner, GitHub configuration, or workload execution.
-2. Refine and independently approve the generated controller and Terraform
+2. Define the reviewed CloudFront/ALB/ECS webhook service layer in the same
+   UAT composition after an ALB origin hostname and ACM certificate are
+   approved; CloudFront-to-ALB HTTP is not an accepted substitute.
+3. Refine and independently approve the generated controller and Terraform
    deployer policies: the first `iam-policy-autopilot` artifacts contain
    wildcard-resource warnings and must not be attached or uploaded.
-3. Supply an approved UAT request ID, bounded cleanup deadline, and reviewed
+4. Supply an approved UAT request ID, bounded cleanup deadline, and reviewed
    scope before any foundation apply.
-4. Run the approved read-only AWS/GCP/GitHub preflight with the reviewed scope file.
-5. Perform one approved live cloud/workload validation and publish validated evidence.
+5. Run the approved read-only AWS/GCP/GitHub preflight with the reviewed scope file.
+6. Perform one approved live cloud/workload validation and publish validated evidence.
 
 ### Guardrails
 
