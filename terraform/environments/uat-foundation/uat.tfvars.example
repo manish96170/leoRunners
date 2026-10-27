@@ -1,0 +1,13 @@
+# This file is safe to commit: it contains no credentials, secrets, AMIs,
+# GitHub tokens, or live action. Copy it outside the repository and replace
+# values only after the network and request scope are approved.
+aws_region         = "us-west-2"
+controller_vpc_id  = "vpc-REPLACE"
+controller_vpc_cidr = "172.31.0.0/16"
+runner_vpc_id      = "vpc-REPLACE"
+runner_vpc_cidr    = "10.0.0.0/16"
+runner_subnet_ids  = ["subnet-REPLACE"]
+
+# Keep null until iam-policy-autopilot output is reviewed. This prevents an
+# accidental controller runtime from receiving unreviewed AWS permissions.
+controller_generated_policy_json = null

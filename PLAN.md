@@ -207,14 +207,23 @@ The specification requires investigation and architecture documentation before r
 
 ### Next
 
-1. Run the approved read-only AWS/GCP/GitHub preflight with the reviewed scope file.
-2. Configure production retention, notification routes, and tenant rollout.
-3. Perform one approved live cloud/workload validation and publish validated evidence.
+1. Review the UAT-only foundation Terraform plan in
+   `terraform/environments/uat-foundation/`; it creates no public ingress,
+   controller task, runner, GitHub configuration, or workload execution.
+2. Refine and independently approve the generated controller and Terraform
+   deployer policies: the first `iam-policy-autopilot` artifacts contain
+   wildcard-resource warnings and must not be attached or uploaded.
+3. Supply an approved UAT request ID, bounded cleanup deadline, and reviewed
+   scope before any foundation apply.
+4. Run the approved read-only AWS/GCP/GitHub preflight with the reviewed scope file.
+5. Perform one approved live cloud/workload validation and publish validated evidence.
 
 ### Guardrails
 
 - AI is optional and disabled by default.
-- No real cloud provisioning in Phase 1.
+- No cloud apply, GitHub workflow enablement, runner registration, or workload
+  execution occurs without a reviewed Terraform plan, bounded UAT scope, and
+  explicit operator approval.
 - Kubernetes remains an optional deployment target, not a controller dependency.
 - No Kubernetes provider, EC2 Fleet, warm pools, or vector database until
   measurements justify them.

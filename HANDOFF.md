@@ -88,9 +88,17 @@ The repository is a greenfield Go project. Phase 0 documentation and the Phase 1
 
 Read `docs/phase-1-plan.md`, then extend the current implementation in this order:
 
-1. Run the read-only AWS/GCP/GitHub preflight and review target ownership.
-2. Configure production retention and extension notification routes.
-3. Run an approved live validation and validate the redacted evidence package
+1. Review `terraform/environments/uat-foundation/README.md` and the exact
+   foundation plan. It is UAT-only and deliberately creates no public endpoint,
+   ECS service/task, EC2 runner, GitHub integration, or workload execution.
+2. Review the policy artifacts generated with `iam-policy-autopilot` from the
+   controller source and Terraform plan. The initial artifacts are not approved
+   because they have wildcard-resource warnings; do not attach or upload them.
+3. Obtain a bounded UAT request ID, cleanup deadline, reviewed network scope,
+   and explicit apply approval. Existing Commerce GitLab runner infrastructure
+   is out of scope and must not be reused or modified.
+4. Run the read-only AWS/GCP/GitHub preflight and review target ownership.
+5. Run an approved live validation and validate the redacted evidence package
    with `tools/evidence-validation/test.sh`; use `--evidence-report` only with
    a single approved AWS or GCP live action. Supply a reviewed `--scope-file`
    and stop on any identity or scope mismatch.
@@ -100,8 +108,10 @@ Do not add AWS calls until the fake-provider end-to-end test passes.
 ## Known evidence gaps
 
 - No real repository workflows are present in this workspace.
-- No AWS or GCP account configuration is present.
-- GitHub App ownership, runner-group policy, target organization, and webhook deployment are not yet supplied.
+- UAT AWS account and read-only discovery are available. The UAT foundation
+  Terraform composition is present but has not been applied.
+- GitHub App installation, runner-group creation, webhook deployment, and the
+  exact Dashboard runner-label policy remain unprovisioned.
 - Cold-start, job-duration, cache, and cost measurements do not exist yet.
 - Real GitHub and cloud lifecycle validation remains outstanding.
 - Packer itself is not installed in this environment; only offline AMI checks have run.
