@@ -177,3 +177,8 @@
       certificate. Use the direct HTTPS ALB shared-gateway design in
       `docs/uat-shared-infrastructure-gateway.md`; CloudFront, Elastic IPs,
       and reuse of the existing GitNexus MCP deployment are out of scope.
+- [ ] Add a clean GNGraph UAT service only after the shared gateway is ready:
+      use independent encrypted EFS/access point, readiness-based health
+      checks, separate credentials/roles/resources, and additive Streamable
+      HTTP path compatibility tests before rewriting `/gitnexus/mcp` to the
+      backend `/mcp` route.

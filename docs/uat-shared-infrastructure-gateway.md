@@ -76,6 +76,16 @@ required for this design.
 The ALB must redirect HTTP to HTTPS or omit the HTTP listener. Public routes
 must not use plaintext HTTP.
 
+### TLS boundary
+
+The UAT baseline requires TLS from the public client to the ALB. The ALB may
+use HTTP to a Fargate task only across the VPC-private ALB-to-task path, with a
+dedicated task security group that permits ingress only from the shared ALB
+security group. This is not cryptographic end-to-end TLS and must not be
+described as such. If a future compliance boundary requires encryption between
+the ALB and container, the service must support HTTPS itself or run a dedicated
+TLS sidecar and use an HTTPS target group.
+
 ## Route-specific authentication
 
 | Route | Authentication |
@@ -101,3 +111,32 @@ must not use plaintext HTTP.
 No Dashboard Actions, GitHub runner group, runner AMI, EC2 runner, MCP client
 cutover, tag, release, stage, or production deployment is part of this gateway
 decision.
+
+## Future GNGraph service requirements
+
+The clean UAT GNGraph service starts with no import of the existing GitNexus
+EFS data. It requires its own encrypted EFS file system and access point,
+because Fargate task replacement without persistent clone/index storage causes
+full repository re-analysis and high startup cost.
+
+The public route is additive:
+
+```text
+POST /gitnexus/mcp
+```
+
+The current GNGraph backend contract is expected to use `/mcp`. Before a client
+cutover, a dedicated UAT GNGraph task must prove Streamable HTTP initialization,
+session ID handling, follow-up `tools/list`, long-running queries, reconnect
+behavior, and any required SSE behavior. Only then may a reviewed ALB rewrite
+map `/gitnexus/mcp` to `/mcp`. The existing GitNexus URL remains unchanged
+until this additive compatibility test succeeds.
+
+The GNGraph target health check must represent MCP readiness rather than process
+startup. Initial indexing/re-analysis must finish, or explicitly report not
+ready, before the ALB serves MCP traffic; a process that is running but still
+rebuilding indexes must not produce a persistent public 502.
+
+GNGraph and LeoRunners retain separate EFS/EFS access points, tokens, IAM
+roles, ECR repositories, security groups, target groups, logs, alarms, storage,
+and deployment roles.
