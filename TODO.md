@@ -172,10 +172,13 @@
       warnings and are not attached or uploaded.
 - [ ] Approve a real UAT request ID, cleanup deadline, controller/runners
       network scope, and a Terraform plan before a foundation apply.
-- [ ] Add the dedicated CloudFront/ALB/ECS webhook service layer to the UAT
-      composition after approving `infrastructure.getanchor.io` and an ACM
-      certificate. Use the direct HTTPS ALB shared-gateway design in
-      `docs/uat-shared-infrastructure-gateway.md`; CloudFront, Elastic IPs,
+- [x] UAT DNS/TLS gateway prerequisites: `infrastructure.getanchor.io` now
+      points to the dedicated UAT ALB and its ACM certificate is `ISSUED` in
+      `us-west-2`. The ALB has no listener or application target yet; see
+      `docs/uat-shared-infrastructure-gateway.md`.
+- [ ] Add the dedicated ALB/ECS webhook service layer to the UAT composition.
+      Adopt the existing UAT ALB/certificate and add only an HTTPS listener and
+      additive target-group/listener-rule resources. CloudFront, Elastic IPs,
       and reuse of the existing GitNexus MCP deployment are out of scope.
 - [ ] Add a clean GNGraph UAT service only after the shared gateway is ready:
       use independent encrypted EFS/access point, readiness-based health

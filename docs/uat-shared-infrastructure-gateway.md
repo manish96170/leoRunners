@@ -76,6 +76,31 @@ required for this design.
 The ALB must redirect HTTP to HTTPS or omit the HTTP listener. Public routes
 must not use plaintext HTTP.
 
+### Verified UAT prerequisites — 2026-10-28
+
+The DNS/platform team has completed the initial shared-gateway prerequisites:
+
+```text
+infrastructure.getanchor.io
+  -> uat-infrastructure-gateway-2023176102.us-west-2.elb.amazonaws.com
+```
+
+The following existing UAT resources must be adopted by the later gateway
+composition and must not be recreated:
+
+| Resource | Verified value |
+| --- | --- |
+| ACM certificate | `arn:aws:acm:us-west-2:307533710979:certificate/d45af8d0-c66c-4bc8-9f48-102d21e8febc` |
+| Certificate status | `ISSUED` for `infrastructure.getanchor.io` |
+| ALB ARN | `arn:aws:elasticloadbalancing:us-west-2:307533710979:loadbalancer/app/uat-infrastructure-gateway/6c45786eb96e1e87` |
+| ALB type/scheme | internet-facing Application Load Balancer |
+| ALB VPC/subnets | `vpc-285e9150`; `subnet-45a3881f`, `subnet-fb9dc582` |
+
+At verification time the ALB had no listener and the certificate was not in
+use. No application is reachable. The next reviewed gateway plan may add only
+the HTTPS listener and additive target-group/listener-rule resources; it must
+not replace, recreate, or alter the DNS association of this ALB.
+
 ### TLS boundary
 
 The UAT baseline requires TLS from the public client to the ALB. The ALB may

@@ -210,10 +210,12 @@ The specification requires investigation and architecture documentation before r
 1. Review the UAT-only foundation Terraform plan in
    `terraform/environments/uat-foundation/`; it creates no public ingress,
    controller task, runner, GitHub configuration, or workload execution.
-2. Define the reviewed CloudFront/ALB/ECS webhook service layer in the same
-   UAT composition after `infrastructure.getanchor.io` and an ACM certificate
-   are approved. The target is a direct HTTPS ALB shared gateway, not
-   CloudFront or an Elastic IP; see `docs/uat-shared-infrastructure-gateway.md`.
+2. Define the reviewed ALB/ECS webhook service layer in the same UAT
+   composition. `infrastructure.getanchor.io`, its issued ACM certificate, and
+   the dedicated UAT ALB now exist; adopt them and add only an HTTPS listener
+   and additive routing resources. The target is a direct HTTPS ALB shared
+   gateway, not CloudFront or an Elastic IP; see
+   `docs/uat-shared-infrastructure-gateway.md`.
 3. Refine and independently approve the generated controller and Terraform
    deployer policies: the first `iam-policy-autopilot` artifacts contain
    wildcard-resource warnings and must not be attached or uploaded.

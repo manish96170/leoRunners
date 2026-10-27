@@ -93,8 +93,10 @@ Read `docs/phase-1-plan.md`, then extend the current implementation in this orde
    ECS service/task, EC2 runner, GitHub integration, or workload execution.
 2. Use `docs/uat-shared-infrastructure-gateway.md` as the approved shared
    gateway direction: create a new direct HTTPS ALB for
-   `infrastructure.getanchor.io`; do not reuse the existing GitNexus MCP
-   deployment or its CloudFront/ALB/ECS/EFS/IAM/secrets lifecycle.
+   `infrastructure.getanchor.io`. The DNS, ACM certificate, and dedicated ALB
+   now exist; adopt them and add only listener/routing resources. Do not reuse
+   the existing GitNexus MCP deployment or its CloudFront/ALB/ECS/EFS/IAM/
+   secrets lifecycle.
 3. Review the policy artifacts generated with `iam-policy-autopilot` from the
    controller source and Terraform plan. The initial artifacts are not approved
    because they have wildcard-resource warnings; do not attach or upload them.
