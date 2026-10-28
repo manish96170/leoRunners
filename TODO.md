@@ -177,9 +177,11 @@
       `us-west-2`. The ALB has no listener or application target yet; see
       `docs/uat-shared-infrastructure-gateway.md`.
 - [ ] Add the dedicated ALB/ECS webhook service layer to the UAT composition.
-      Adopt the existing UAT ALB/certificate and add only an HTTPS listener and
-      additive target-group/listener-rule resources. CloudFront, Elastic IPs,
-      and reuse of the existing GitNexus MCP deployment are out of scope.
+      The review-only plan now adopts the existing UAT ALB/certificate and
+      creates only a fixed-404 HTTPS listener plus TCP/443 ingress. Additive
+      target-group/listener-rule/service resources remain blocked on a
+      separately approved controller plan. CloudFront, Elastic IPs, and reuse
+      of the existing GitNexus MCP deployment are out of scope.
 - [ ] Add a clean GNGraph UAT service only after the shared gateway is ready:
       use independent encrypted EFS/access point, readiness-based health
       checks, separate credentials/roles/resources, and additive Streamable

@@ -70,6 +70,48 @@ variable "runner_subnet_ids" {
   type        = list(string)
 }
 
+variable "enable_https_gateway" {
+  description = "Adopt the externally bootstrapped UAT ALB/certificate and create only the HTTPS listener with a fixed 404 default."
+  type        = bool
+  default     = false
+}
+
+variable "gateway_alb_arn" {
+  description = "Existing dedicated UAT gateway ALB ARN. Required only when enable_https_gateway is true."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.gateway_alb_arn == null || can(regex("^arn:[^:]+:elasticloadbalancing:[^:]+:[0-9]{12}:loadbalancer/app/.+$", var.gateway_alb_arn))
+    error_message = "gateway_alb_arn must be an Application Load Balancer ARN or null."
+  }
+}
+
+variable "gateway_alb_security_group_id" {
+  description = "Security group already attached to the dedicated UAT gateway ALB. Required only when enable_https_gateway is true."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.gateway_alb_security_group_id == null || can(regex("^sg-[0-9a-f]+$", var.gateway_alb_security_group_id))
+    error_message = "gateway_alb_security_group_id must be an EC2 security group ID or null."
+  }
+}
+
+variable "gateway_certificate_arn" {
+  description = "Issued ACM certificate ARN in the gateway ALB region. Required only when enable_https_gateway is true."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.gateway_certificate_arn == null || can(regex("^arn:[^:]+:acm:[^:]+:[0-9]{12}:certificate/.+$", var.gateway_certificate_arn))
+    error_message = "gateway_certificate_arn must be an ACM certificate ARN or null."
+  }
+}
+
 variable "controller_generated_policy_json" {
   description = "Optional reviewed output from iam-policy-autopilot. Null creates the controller role without runtime permissions."
   type        = string

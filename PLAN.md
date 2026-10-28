@@ -212,8 +212,9 @@ The specification requires investigation and architecture documentation before r
    controller task, runner, GitHub configuration, or workload execution.
 2. Define the reviewed ALB/ECS webhook service layer in the same UAT
    composition. `infrastructure.getanchor.io`, its issued ACM certificate, and
-   the dedicated UAT ALB now exist; adopt them and add only an HTTPS listener
-   and additive routing resources. The target is a direct HTTPS ALB shared
+   the dedicated UAT ALB now exist. The review-only gateway plan adds only a
+   port-443 ingress rule and fixed-404 HTTPS listener; later plans add
+   target-group and service routes. The target is a direct HTTPS ALB shared
    gateway, not CloudFront or an Elastic IP; see
    `docs/uat-shared-infrastructure-gateway.md`.
 3. Refine and independently approve the generated controller and Terraform

@@ -37,3 +37,8 @@ output "runner_security_group_id" {
   description = "Dedicated ingress-free runner security group."
   value       = module.runner_network.runner_security_group_id
 }
+
+output "gateway_https_listener_arn" {
+  description = "HTTPS listener ARN on the adopted UAT gateway ALB, or null while the gateway layer is disabled."
+  value       = try(aws_lb_listener.gateway_https[0].arn, null)
+}

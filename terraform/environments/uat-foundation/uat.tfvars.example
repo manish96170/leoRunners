@@ -11,3 +11,11 @@ runner_subnet_ids  = ["subnet-REPLACE"]
 # Keep null until iam-policy-autopilot output is reviewed. This prevents an
 # accidental controller runtime from receiving unreviewed AWS permissions.
 controller_generated_policy_json = null
+
+# Gateway prerequisites are externally bootstrapped and are adopted only after
+# reviewing the gateway-only plan. The enabled plan creates a HTTPS listener
+# that returns 404 until a later service adds its own target group and route.
+enable_https_gateway          = false
+gateway_alb_arn               = null
+gateway_alb_security_group_id = null
+gateway_certificate_arn       = null

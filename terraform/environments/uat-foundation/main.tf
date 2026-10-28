@@ -160,3 +160,55 @@ module "runner_network" {
   egress_mode                  = "nat"
   tags                         = merge(local.common_tags, { Component = "runner-security-group" })
 }
+
+# The ALB and certificate are externally bootstrapped shared-gateway resources.
+# They are intentionally referenced by ARN rather than recreated here.
+resource "aws_vpc_security_group_ingress_rule" "gateway_https" {
+  count = var.enable_https_gateway ? 1 : 0
+
+  security_group_id = var.gateway_alb_security_group_id
+  description       = "Public HTTPS entry point for the reviewed UAT shared gateway."
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  ip_protocol       = "tcp"
+  to_port           = 443
+
+  lifecycle {
+    precondition {
+      condition     = var.gateway_alb_security_group_id != null
+      error_message = "enable_https_gateway requires gateway_alb_security_group_id."
+    }
+  }
+}
+
+resource "aws_lb_listener" "gateway_https" {
+  count = var.enable_https_gateway ? 1 : 0
+
+  load_balancer_arn = var.gateway_alb_arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.gateway_certificate_arn
+
+  default_action {
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "UAT infrastructure gateway route not configured"
+      status_code  = "404"
+    }
+  }
+
+  tags = merge(local.common_tags, { Component = "shared-gateway-https-listener" })
+
+  lifecycle {
+    precondition {
+      condition = (
+        var.gateway_alb_arn != null &&
+        var.gateway_certificate_arn != null
+      )
+      error_message = "enable_https_gateway requires gateway_alb_arn and gateway_certificate_arn."
+    }
+  }
+}
