@@ -1,0 +1,80 @@
+apiVersion: runner-images.leorunners.io/v1
+kind: RunnerImageProfile
+metadata:
+  name: base-linux-x64
+  version: 1.0.0
+  description: Minimal immutable Linux x86_64 profile for ephemeral GitHub runners.
+spec:
+  architecture: x86_64
+  operatingSystem: linux
+  parent:
+    kind: operating-system-image
+    name: AL2023
+    version: pinned-by-build-input
+  bootstrap:
+    entrypoint: /opt/leo-runner/bootstrap/runner/bootstrap.sh
+    contract: github-jit-encoded-config
+    runAs: runner
+    userDataMayInstallPackages: false
+  tools:
+    - name: bash
+      version: pinned-by-os
+      purpose: bootstrap and runner execution
+    - name: coreutils
+      version: pinned-by-os
+      purpose: filesystem and process lifecycle operations
+    - name: ca-certificates
+      version: pinned-by-os
+      purpose: TLS verification
+    - name: curl
+      version: pinned-by-build-input
+      purpose: HTTPS bootstrap and diagnostics
+    - name: git
+      version: pinned-by-build-input
+      purpose: repository checkout
+    - name: jq
+      version: pinned-by-build-input
+      purpose: structured diagnostics
+    - name: tar
+      version: pinned-by-os
+      purpose: runner distribution extraction
+    - name: unzip
+      version: pinned-by-os
+      purpose: archive extraction for actions
+    - name: github-actions-runner
+      version: pinned-by-build-input
+      checksumRequired: true
+      purpose: one-job JIT execution
+  security:
+    user: runner
+    allowRootJobs: false
+    credentialsBakedIn: false
+    jitConfigBakedIn: false
+    requireIMDSv2: true
+    encryptedRootVolume: true
+    privilegedContainers: false
+    shellHistoryCleared: true
+    buildArtifactsRemoved: true
+  validation:
+    requiredGates:
+      - schema
+      - reproducibility
+      - forbidden-secret-scan
+      - tool-smoke-test
+      - exact-ami-ephemeral-launch
+      - jit-registration
+      - lifecycle-cleanup
+      - cold-start-measurement
+    measurements:
+      - launch_to_running_ms
+      - running_to_bootstrap_ms
+      - bootstrap_to_registered_ms
+      - registered_to_ready_ms
+      - ready_to_job_ms
+      - total_lifecycle_ms
+      - image_size_bytes
+  publication:
+    state: candidate
+    immutable: true
+    rollbackTo: null
+    regions: []

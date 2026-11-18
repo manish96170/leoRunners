@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+printf 'aws %s\n' "$*" >>"${CLOUD_VALIDATION_MOCK_LOG:?}"
+case "$*" in
+    *'sts get-caller-identity'*'--query Account'*) printf '%s\n' '000000000000' ;;
+    *'sts get-caller-identity'*) printf '%s\n' '{"Account":"000000000000","Arn":"arn:aws:iam::000000000000:role/fixture"}' ;;
+    *'describe-launch-template-versions'*'ImageId'*) printf '%s\n' 'ami-fixture' ;;
+    *'describe-launch-template-versions'*'InstanceType'*)
+        if [ "${CLOUD_VALIDATION_MOCK_UNSAFE_TEMPLATE:-0}" = 1 ]; then printf '%s\n' 'm6i.32xlarge'; else printf '%s\n' 't3.micro'; fi
+        ;;
+    *'describe-instances'*)
+        if [ "${CLOUD_VALIDATION_MOCK_DISCOVERY_FAIL:-0}" = 1 ]; then exit 1; fi
+        printf '%s\n' ''
+        ;;
+    *'run-instances'*) printf '%s\n' 'i-0123456789abcdef0' ;;
+    *'terminate-instances'*)
+        if [ "${CLOUD_VALIDATION_MOCK_CLEANUP_FAIL:-0}" = 1 ]; then exit 1; fi
+        printf '%s\n' '{"TerminatingInstances":[]}'
+        ;;
+    *) exit 0 ;;
+esac

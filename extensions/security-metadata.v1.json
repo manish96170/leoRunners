@@ -1,0 +1,11 @@
+{
+  "apiVersion": "extensions.leorunners.io/v1",
+  "kind": "ExtensionRecord",
+  "extensionId": "security.posture",
+  "extensionType": "security",
+  "emittedAt": "2026-09-13T10:02:00Z",
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-security-1", "repository": "example/project"},
+  "retention": {"expiresAt": "2026-09-20T10:02:00Z", "redacted": true, "evidenceClass": "diagnostic"},
+  "metadata": {"schemaVersion": "1", "eventType": "workload.posture", "source": "security-policy-v1", "evidence": "derived", "values": {"trust_class": "fork-pr", "profile": "isolated", "network": "restricted", "privileged": false}},
+  "advisory": {"status": "review", "severity": "medium", "summary": "The workload is isolated and should be reviewed before expanding capabilities.", "confidence": 0.98, "recommendations": ["Keep cloud credentials unavailable to fork workloads.", "Review network requirements against the approved profile."], "annotations": {"fail_closed": true, "lifecycle_authority": "controller"}}
+}

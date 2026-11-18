@@ -1,0 +1,19 @@
+{
+  "schema_version": "phase-51.v1",
+  "comparison_id": "phase-51-sample-001",
+  "expected_providers": ["aws", "gcp"],
+  "reference_provider": "aws",
+  "metrics": ["startup_ms", "lifecycle_ms", "cache_hit_rate_percent", "network_ms", "cost_usd"],
+  "regression_thresholds_percent": {"startup_ms": 20, "lifecycle_ms": 20, "cache_hit_rate_percent": 10, "network_ms": 20, "cost_usd": 25},
+  "claim_policy": "bounded-evidence-only",
+  "real_world_claim": false,
+  "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"},
+  "samples": [
+    {"provider": "aws", "sample_id": "aws-01", "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"}, "values": {"startup_ms": 100, "lifecycle_ms": 500, "cache_hit_rate_percent": 80, "network_ms": 40, "cost_usd": 0.02}},
+    {"provider": "aws", "sample_id": "aws-02", "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"}, "values": {"startup_ms": 110, "lifecycle_ms": 520, "cache_hit_rate_percent": 82, "network_ms": 42, "cost_usd": 0.021}},
+    {"provider": "aws", "sample_id": "aws-03", "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"}, "values": {"startup_ms": 90, "lifecycle_ms": 480, "cache_hit_rate_percent": 78, "network_ms": 38, "cost_usd": 0.019}},
+    {"provider": "gcp", "sample_id": "gcp-01", "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"}, "values": {"startup_ms": 105, "lifecycle_ms": 510, "cache_hit_rate_percent": 81, "network_ms": 41, "cost_usd": 0.022}},
+    {"provider": "gcp", "sample_id": "gcp-02", "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"}, "values": {"startup_ms": 115, "lifecycle_ms": 530, "cache_hit_rate_percent": 83, "network_ms": 43, "cost_usd": 0.023}},
+    {"provider": "gcp", "sample_id": "gcp-03", "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"}, "values": {"startup_ms": 95, "lifecycle_ms": 490, "cache_hit_rate_percent": 79, "network_ms": 39, "cost_usd": 0.021}}
+  ]
+}

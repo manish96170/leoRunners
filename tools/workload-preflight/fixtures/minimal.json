@@ -1,0 +1,15 @@
+{
+  "name": "minimal-node-browser-workload",
+  "architecture": "arm64",
+  "min_disk_bytes": 10737418240,
+  "min_memory_bytes": 4294967296,
+  "commands": [
+    {"name": "git", "min_version": "2.0"},
+    {"name": "node", "min_version": "18.0"}
+  ],
+  "docker": {"required": false, "min_version": "24.0"},
+  "browsers": [
+    {"name": "google-chrome", "required": false},
+    {"name": "chromium", "required": false}
+  ]
+}

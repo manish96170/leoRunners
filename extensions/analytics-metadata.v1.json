@@ -1,0 +1,11 @@
+{
+  "apiVersion": "extensions.leorunners.io/v1",
+  "kind": "ExtensionRecord",
+  "extensionId": "analytics.summary",
+  "extensionType": "analytics",
+  "emittedAt": "2026-09-13T10:00:00Z",
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-analytics-1", "repository": "example/project"},
+  "retention": {"expiresAt": "2026-10-13T10:00:00Z", "redacted": true, "evidenceClass": "operational"},
+  "metadata": {"schemaVersion": "1", "eventType": "job.duration", "source": "analytics-v1", "evidence": "observed", "values": {"provider": "aws", "duration_ms": 42000, "outcome": "completed", "sample_count": 1}},
+  "advisory": {"status": "informational", "severity": "none", "summary": "Job timing was recorded for aggregate reporting.", "confidence": 1, "recommendations": [], "annotations": {"aggregation": "provider"}}
+}

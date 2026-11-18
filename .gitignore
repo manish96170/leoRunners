@@ -1,0 +1,31 @@
+.DS_Store
+
+# Local state, plans, credentials, and environment files
+.env
+.env.*
+*.tfvars
+!variables.example.tfvars
+!terraform.tfvars.example
+*.tfplan
+*.tfstate
+*.tfstate.*
+*.pem
+*.key
+*.crt
+*.pkrvars.hcl
+!example.pkrvars.hcl
+
+# Generated tool/build output. Patterns are anchored so that built binaries are
+# ignored without hiding the source directories that share their names.
+.terraform/
+manifest.json
+/bin/
+dist/
+coverage.out
+*.test
+/runner-controller
+/controller/runner-controller
+/tools/security-validation/security-validation
+/tools/workload-preflight/workload-preflight
+/tools/workload-validation/workload-validation
+/tools/benchmark-compare/benchmark-compare

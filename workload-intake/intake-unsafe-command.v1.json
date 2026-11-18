@@ -1,0 +1,14 @@
+{
+  "apiVersion": "workload-intake.leorunners.io/v1",
+  "kind": "WorkloadIntake",
+  "metadata": { "name": "unsafe-command", "version": "1.0.0" },
+  "spec": {
+    "repository": { "url": "https://github.com/manish96170/leoRunners", "commit": "3d8acb1904854728572e7f45459255f7f2113858", "workflow": ".github/workflows/ci.yml", "workflowDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    "workload": { "id": "unsafe-command", "manifestPath": "workloads/workload-manifest.v1.yaml", "manifestDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "command": "while true; do go test ./...; done", "commandDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "shell": "bash" },
+    "provenance": { "source": "offline-fixture", "inspectedAt": "2026-09-14T00:00:00Z", "submittedBy": "platform-owner", "approval": { "requestId": "req-unsafe-command", "approvedBy": "platform-owner", "approvedAt": "2026-09-14T00:00:00Z", "expiresAt": "2026-09-15T00:00:00Z", "purpose": "unsafe fixture" } },
+    "toolRequirements": [ { "name": "go", "version": "1.27.1", "source": "approved-image" } ],
+    "observations": { "cache": { "mode": "disabled", "namespaceObserved": false, "keysRedacted": true }, "network": { "egressMode": "none", "endpointsObserved": [], "externalAccessApproved": false }, "security": { "trustClass": "untrusted", "isolationProfile": "isolated", "capabilitiesObserved": [] } },
+    "redaction": { "status": "redacted", "secretsScanned": true, "rawPayloadsExcluded": true, "identifiersHashed": true },
+    "comparability": { "protocolId": "workload-intake-1", "comparisonKey": "unsafe-command", "fixedCommit": "3d8acb1904854728572e7f45459255f7f2113858", "fixedManifestDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "fixedCommandDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }
+  }
+}

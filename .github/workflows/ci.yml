@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: controller
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: controller/go.mod
+          cache-dependency-path: controller/go.sum
+      - run: go test ./...
+
+  race:
+    name: Race tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: controller/go.mod
+          cache-dependency-path: controller/go.sum
+      - run: go test -race ./...
+
+  vet:
+    name: Vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: controller/go.mod
+          cache-dependency-path: controller/go.sum
+      - run: go vet ./...
+
+  build:
+    name: Build and container checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: controller/go.mod
+          cache-dependency-path: controller/go.sum
+      - run: go build ./...
+      - name: Build container image
+        working-directory: .
+        run: docker build --tag leo-runners/controller:ci .
+      - name: Verify image runs as non-root
+        working-directory: .
+        run: test "$(docker image inspect leo-runners/controller:ci --format '{{.Config.User}}')" = "65532:65532"

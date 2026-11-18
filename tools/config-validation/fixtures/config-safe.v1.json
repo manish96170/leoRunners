@@ -1,0 +1,6 @@
+{
+  "version": "v1",
+  "features": {"githubJIT": false, "ai": false, "extensions": false},
+  "secretValuesPresent": {"GITHUB_WEBHOOK_SECRET": true, "GITHUB_APP_INSTALLATION_TOKEN": false, "AI_API_KEY": false},
+  "diagnostics": {"containsSecretValues": false, "persistsSecretValues": false}
+}

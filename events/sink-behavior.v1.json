@@ -1,0 +1,22 @@
+{
+  "apiVersion": "events.leorunners.io/v1",
+  "kind": "EventSinkBehaviorEvidence",
+  "metadata": {"name": "offline-contract-fixtures", "version": "1.0.0"},
+  "scenarios": [
+    {
+      "name": "duplicate_delivery",
+      "delivery": {"deduplication_key": "github:delivery-001", "attempts": 2, "persisted_records": 1, "processed_records": 1, "acknowledgements": 2},
+      "expected": {"idempotent": true, "duplicate_suppressed": true, "ack_after_persist": true}
+    },
+    {
+      "name": "read_only_replay",
+      "replay": {"selected_events": 2, "emitted_events": 2, "preserved_event_ids": true, "lifecycle_side_effects": 0, "bounded": true},
+      "expected": {"read_only": true, "side_effects_forbidden": true}
+    },
+    {
+      "name": "queue_overflow",
+      "queue": {"capacity": 2, "submitted": 3, "persisted": 2, "dropped": 1, "drop_reason": "queue_full", "cleanup_blocked": false},
+      "expected": {"drop_measured": true, "bounded": true, "cleanup_unblocked": true}
+    }
+  ]
+}

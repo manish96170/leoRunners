@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: leo-runners-state
+  labels:
+    app.kubernetes.io/name: leo-runners-controller
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # Bind this claim to an encrypted storage class in each cluster.
+  storageClassName: encrypted-csi

@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unsafe-controller
+spec:
+  template:
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+        - name: controller
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true
+          volumeMounts:
+            - name: host
+              mountPath: /host
+      volumes:
+        - name: host
+          hostPath:
+            path: /var/run
+        - name: docker
+          hostPath:
+            path: /var/run/docker.sock

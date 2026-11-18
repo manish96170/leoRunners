@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+spec:
+  template:
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: controller
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+          env:
+            - name: GITHUB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: controller
+                  key: webhook

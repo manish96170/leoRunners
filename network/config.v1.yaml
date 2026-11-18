@@ -1,0 +1,172 @@
+apiVersion: network.leorunners.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ephemeral-runner-default
+  version: 1.0.0
+  description: Preflight-only network contract for ephemeral CI runners.
+spec:
+  enabled: true
+  rollout: preflight-only
+  schedulerCriticalDependency: true
+  mutateInfrastructureAutomatically: false
+  subnet:
+    preferredClass: private
+    allowPublicForValidation: false
+    requireNoPublicIPByDefault: true
+    publicExceptionRequiresOwnerApproval: true
+  egress:
+    defaultMode: approved-destinations
+    allowedModes:
+      - nat
+      - vpc-endpoint
+      - cloud-private-access
+      - approved-proxy
+      - direct-internet-approved
+    requireTLS: true
+    maxConnectionTimeoutSeconds: 15
+    maxCheckDurationSeconds: 30
+    recordCostEvidence: true
+    failClosedForUnknownDestination: true
+  dns:
+    mode: cloud-resolver
+    allowedModes:
+      - cloud-resolver
+      - approved-forwarder
+      - private-zone
+    requireCertificateValidation: true
+    publicResolverFallback: false
+    recordResolverMode: true
+  security:
+    inbound:
+      defaultAction: deny
+      allowSSH: false
+      allowRDP: false
+      allowRunnerListenerPorts: false
+      allowInternetSource: false
+    outbound:
+      protocol: tcp
+      allowedPorts: [443]
+      allowAllIPv4: false
+      allowAllIPv6: false
+    protectInstanceMetadata: true
+    requireAWSIMDSv2: true
+    untrustedForksUseSeparateTrustBoundary: true
+  destinations:
+    - id: github-api
+      purpose: JIT configuration, runner registration, and control-plane API.
+      hostname: api.github.com
+      protocol: https
+      port: 443
+      required: true
+      providers: [aws, gcp, customer]
+      egressModes: [nat, approved-proxy, direct-internet-approved]
+      trustBoundary: github-control-plane
+      owner: platform
+      evidence: {status: pending, references: []}
+    - id: github-actions
+      purpose: Runner job coordination and artifact operations.
+      hostname: github.com
+      protocol: https
+      port: 443
+      required: true
+      providers: [aws, gcp, customer]
+      egressModes: [nat, approved-proxy, direct-internet-approved]
+      trustBoundary: github-control-plane
+      owner: platform
+      evidence: {status: pending, references: []}
+    - id: package-registries
+      purpose: Approved package and dependency registries discovered per workload.
+      hostname: workload-defined
+      protocol: https
+      port: 443
+      required: true
+      providers: [aws, gcp, customer]
+      egressModes: [nat, vpc-endpoint, cloud-private-access, approved-proxy, direct-internet-approved]
+      trustBoundary: workload
+      owner: workload-owner
+      evidence: {status: pending, references: []}
+    - id: container-registries
+      purpose: Approved container image and layer registries.
+      hostname: workload-defined
+      protocol: https
+      port: 443
+      required: false
+      providers: [aws, gcp, customer]
+      egressModes: [nat, vpc-endpoint, cloud-private-access, approved-proxy]
+      trustBoundary: workload
+      owner: workload-owner
+      evidence: {status: pending, references: []}
+  providerMapping:
+    aws:
+      subnetClass: private
+      publicEgress: nat-or-approved-proxy
+      privateServicePath: vpc-endpoint-where-supported
+      firewall: security-group
+      dns: vpc-resolver
+      identity: instance-profile-imdsv2
+    gcp:
+      subnetClass: private
+      publicEgress: cloud-nat-or-approved-proxy
+      privateServicePath: private-google-access-or-psc
+      firewall: vpc-firewall
+      dns: cloud-dns-resolver
+      identity: vm-service-account
+    customer:
+      subnetClass: customer-private
+      publicEgress: customer-approved-proxy-or-firewall
+      privateServicePath: customer-endpoint
+      firewall: customer-firewall
+      dns: customer-approved-resolver
+      identity: customer-short-lived-identity
+  trustBoundaries:
+    trusted-repository:
+      allowPrivatePackages: true
+      allowSharedTrustedCache: true
+      allowCustomerNetwork: owner-approved
+    untrusted-fork:
+      allowPrivatePackages: false
+      allowSharedTrustedCache: false
+      allowCustomerNetwork: false
+      egressProfile: restricted-approved-destinations
+  cost:
+    classifyAs: estimate-until-billing-match
+    includeNatHourly: true
+    includeNatProcessing: true
+    includeEndpointHourly: true
+    includeEndpointProcessing: true
+    includeCrossZoneTransfer: true
+    requireOwnerReviewBeforeLive: true
+  evidence:
+    requiredFields:
+      - policy-version
+      - workload-revision
+      - provider
+      - region-or-zone
+      - image-fingerprint
+      - subnet-class
+      - egress-mode
+      - dns-mode
+      - security-profile
+      - destination-result
+      - latency-ms
+      - cleanup-result
+    redact:
+      - credentials
+      - authorization-headers
+      - signed-urls
+      - user-data
+      - environment-values
+      - customer-payloads
+      - full-private-hostnames
+    retainRawResolverQueries: false
+    retainRawRequestPayloads: false
+  rolloutPolicy:
+    requireOfflineValidation: true
+    requireReadOnlyPreflight: true
+    requireImmutableWorkloadRevision: true
+    requireSingleRunnerFirst: true
+    requireRepeatedEvidenceBeforeExpansion: true
+    automaticRouteChanges: false
+    automaticFirewallChanges: false
+    automaticEndpointChanges: false
+    automaticCrossAccountChanges: false

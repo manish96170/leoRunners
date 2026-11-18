@@ -1,0 +1,11 @@
+{
+  "apiVersion": "extensions.leorunners.io/v1",
+  "kind": "ExtensionRecord",
+  "extensionId": "intelligence.advisor",
+  "extensionType": "intelligence",
+  "emittedAt": "2026-09-13T10:07:00Z",
+  "subject": {"tenantId": "tenant-demo", "jobId": "job-intelligence-2", "repository": "example/project"},
+  "retention": {"expiresAt": "2026-09-20T10:07:00Z", "redacted": true, "evidenceClass": "diagnostic"},
+  "metadata": {"schemaVersion": "1", "eventType": "failure.classification", "source": "local-model-v1", "evidence": "derived", "values": {"category": "tooling", "model_used": true, "input_redacted": true}},
+  "advisory": {"status": "review", "severity": "low", "summary": "The failure resembles a tooling mismatch; verify the runner image definition.", "confidence": 0.71, "recommendations": ["Compare the required tool version with the published image profile."], "annotations": {"action_policy": "advisory-only", "credential_access": false}}
+}

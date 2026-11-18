@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leo-runners.dev/schemas/observability.v1.json",
+  "title": "Leo Runners observability alert configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "observability.leorunners.io/v1" },
+    "kind": { "const": "AlertConfig" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{2,63}$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "namespace", "dimensions", "alerts"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "namespace": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_./-]{0,255}$" },
+        "dimensions": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["provider", "region", "state", "outcome", "capacity_owner", "error_class", "extension"] },
+          "uniqueItems": true,
+          "maxItems": 7
+        },
+        "alerts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "enabled", "metric", "statistic", "comparison", "threshold", "period_seconds", "evaluation_periods", "severity", "dimensions", "actions"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]{2,63}$" },
+              "enabled": { "type": "boolean" },
+              "metric": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]{2,127}$" },
+              "statistic": { "enum": ["Sum", "Average", "Minimum", "Maximum", "SampleCount"] },
+              "comparison": { "enum": ["GreaterThanOrEqualToThreshold", "GreaterThanThreshold", "LessThanOrEqualToThreshold", "LessThanThreshold"] },
+              "threshold": { "type": "number" },
+              "period_seconds": { "type": "integer", "minimum": 10 },
+              "evaluation_periods": { "type": "integer", "minimum": 1, "maximum": 100 },
+              "severity": { "enum": ["info", "warning", "critical"] },
+              "dimensions": { "type": "array", "items": { "type": "string", "enum": ["provider", "region", "state", "outcome", "capacity_owner", "error_class", "extension"] }, "uniqueItems": true, "maxItems": 7 },
+              "actions": { "type": "array", "items": { "enum": ["notify_oncall", "notify_team", "none"] }, "uniqueItems": true, "maxItems": 3 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

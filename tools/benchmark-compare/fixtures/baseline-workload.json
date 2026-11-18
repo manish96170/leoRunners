@@ -1,0 +1,8 @@
+{
+  "schema_version": "workload-validation.v1",
+  "id": "run-baseline-1",
+  "mode": "command",
+  "duration": 10000000000,
+  "platform_timings": {"queue": 100000000, "launch": 2000000000, "boot": 3000000000},
+  "workload_timings": {"build": 2000000000, "tests": 2900000000}
+}

@@ -1,0 +1,35 @@
+{
+  "apiVersion": "activation.leorunners.io/v1",
+  "kind": "ActivationRequest",
+  "metadata": { "name": "lifecycle-smoke", "version": "1.0.0" },
+  "spec": {
+    "request_id": "activation-20260914-002",
+    "requested_at": "2026-09-14T09:00:00Z",
+    "operator": { "id": "operator.manish", "contact": "operator@example.com" },
+    "approver": { "id": "approver.platform", "contact": "approver@example.com" },
+    "target": {
+      "provider": "gcp",
+      "account": null,
+      "project": "leo-runners-dev",
+      "region": "us-central1",
+      "repository": "manish96170/leoRunners"
+    },
+    "scope_file": {
+      "path": "validation/scopes/approved.v1.json",
+      "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+    },
+    "scopes": ["gcp:project:leo-runners-dev", "gcp:region:us-central1"],
+    "resource_prefix": "leo-lifecycle",
+    "max_resources": 2,
+    "deadline": "2026-09-14T18:00:00Z",
+    "budget": { "currency": "USD", "max_amount": 50.00 },
+    "notification": { "channel": "slack", "destination": "#leo-runners-ops" },
+    "rollback_owner": { "id": "rollback.platform", "contact": "rollback@example.com" },
+    "mode": "lifecycle",
+    "confirmation": {
+      "approved_at": "2026-09-14T09:05:00Z",
+      "phrase": "I_UNDERSTAND_EPHEMERAL_RESOURCES",
+      "change_reference": "change-activation-002"
+    }
+  }
+}

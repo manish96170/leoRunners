@@ -1,0 +1,27 @@
+# Non-secret placeholders. Copy to an owner-only location outside Git.
+# The defaults keep every phase disabled, so this plans as a no-op.
+
+region      = "us-east-1"
+name_prefix = "leo-runners"
+
+vpc_id                = "vpc-0123456789abcdef0"
+subnet_ids            = ["subnet-0123456789abcdef0", "subnet-0fedcba9876543210"]
+alb_arn               = "arn:aws:elasticloadbalancing:us-east-1:111122223333:loadbalancer/app/example/0123456789abcdef"
+alb_security_group_id = "sg-0123456789abcdef0"
+certificate_arn       = "arn:aws:acm:us-east-1:111122223333:certificate/00000000-0000-0000-0000-000000000000"
+
+https_ingress_cidr_blocks = ["192.0.2.0/24"]
+egress_https_cidr_blocks  = ["10.0.0.0/8"]
+
+tags = {
+  Environment = "example"
+  Owner       = "example-team"
+  RequestId   = "example-request-1"
+}
+
+# Staged rollout, one reviewed change at a time:
+#   1. enable_gateway = true                    (HTTPS listener, fixed 404)
+#   2. create_foundation = true                 (registry, logs, state, secret containers, roles)
+#   3. publish the image, populate secrets, generate and review the policy
+#   4. enable_listener_rule = true, enable_service = true, plus
+#      image_digest, secrets_ready, task_role_policy_json

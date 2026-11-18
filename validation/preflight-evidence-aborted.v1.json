@@ -1,0 +1,16 @@
+{
+  "apiVersion": "validation.leorunners.io/v1",
+  "kind": "PreflightEvidence",
+  "metadata": { "name": "gcp-preflight-aborted", "version": "1.0.0" },
+  "spec": {
+    "run": { "run_id": "preflight-20260913-aborted", "mode": "read_only_preflight", "started_at": "2026-09-13T08:10:00Z", "finished_at": "2026-09-13T08:10:02Z", "duration_ms": 2000, "outcome": "aborted", "outcome_reason": "provider identity scope was not confirmed" },
+    "provider": { "name": "gcp", "region": "us-central1", "account_scope": "configured-project", "resource_scope": ["identity", "observability"] },
+    "observability": {
+      "metrics": { "status": "not_checked", "checked_at": "2026-09-13T08:10:01Z", "reason": "aborted before provider confirmation" },
+      "logs": { "status": "not_checked", "checked_at": "2026-09-13T08:10:01Z", "reason": "aborted before provider confirmation" },
+      "alarms": { "status": "not_checked", "checked_at": "2026-09-13T08:10:01Z", "reason": "aborted before provider confirmation" },
+      "dashboards": { "status": "not_checked", "checked_at": "2026-09-13T08:10:01Z", "reason": "aborted before provider confirmation" }
+    },
+    "cleanup": { "attempted": true, "completed": true, "resource_refs": ["preflight:gcp:us-central1:no-resources-created"], "verified_at": "2026-09-13T08:10:02Z" }
+  }
+}

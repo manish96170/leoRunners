@@ -1,0 +1,12 @@
+{
+  "apiVersion": "release-validation.leorunners.io/v1",
+  "kind": "ReleaseValidationReport",
+  "metadata": {"name": "leo-runners-release-fixture", "version": "1.0.0"},
+  "spec": {
+    "status": "pass",
+    "read_only": true,
+    "live_provisioning_invoked": false,
+    "checks": [{"name": "live-provisioning", "status": "PASS", "exit_code": 0, "message": "no live provisioning command was invoked"}],
+    "summary": {"warnings": 0, "failures": 0}
+  }
+}

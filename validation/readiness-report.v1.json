@@ -1,0 +1,12 @@
+{
+  "apiVersion": "readiness.leorunners.io/v1",
+  "kind": "FinalReadinessReport",
+  "metadata": {"name": "leo-runners", "version": "1.0.0"},
+  "spec": {
+    "status": "pass",
+    "read_only": true,
+    "live_mutation_invoked": false,
+    "checks": [],
+    "environment_gated": ["AWS", "GCP", "GitHub", "Docker", "kubectl", "Packer", "Terraform-provider"]
+  }
+}

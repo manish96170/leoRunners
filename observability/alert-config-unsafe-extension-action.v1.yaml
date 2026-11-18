@@ -1,0 +1,21 @@
+apiVersion: observability.leorunners.io/v1
+kind: AlertConfig
+metadata:
+  name: unsafe-extension-action
+  version: 1.0.0
+spec:
+  enabled: true
+  namespace: LeoRunners/Controller
+  dimensions: [extension, error_class]
+  alerts:
+    - name: extension-timeout-retry
+      enabled: true
+      metric: extension_timeouts_total
+      statistic: Sum
+      comparison: GreaterThanThreshold
+      threshold: 0
+      period_seconds: 60
+      evaluation_periods: 1
+      severity: critical
+      dimensions: [extension]
+      actions: [retry]

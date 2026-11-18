@@ -1,0 +1,22 @@
+{
+  "apiVersion": "recovery.leorunners.io/v1",
+  "kind": "RecoveryEvidence",
+  "metadata": {
+    "name": "controller-recovery",
+    "run_id": "recovery-20260914-pass",
+    "started_at": "2026-09-14T10:00:00Z",
+    "finished_at": "2026-09-14T10:00:18Z"
+  },
+  "spec": {
+    "recovery_window_seconds": 18,
+    "state_recovery": {
+      "file": { "primary_snapshot": "corrupt", "backup_snapshot": "valid", "backup_restored": true, "records_before": 4, "records_after": 4, "revision_preserved": true },
+      "dynamodb": { "records_before": 4, "records_after": 4, "conditional_revision_conflicts": 1, "conflicts_rejected": 1, "recovered_without_overwrite": true, "provider_calls": 0 }
+    },
+    "event_replay": { "events_read": 6, "unique_events": 4, "duplicate_events": 2, "events_applied": 4, "side_effects_before_replay": 4, "side_effects_after_replay": 4, "idempotent": true, "event_ids_preserved": true, "provider_calls": 0 },
+    "lease_fencing": { "old_token": 7, "new_token": 8, "stale_writes_attempted": 2, "stale_writes_rejected": 2, "current_owner": "replica-b", "fencing_enforced": true },
+    "stale_runner_reaping": { "scanned": 5, "stale": 2, "reaped": 2, "active_protected": 3, "reap_idempotent": true, "provider_calls": 0 },
+    "takeover": { "replicas": 2, "failed_owner": "replica-a", "takeover_owner": "replica-b", "lease_expired": true, "takeover_acquired": true, "old_owner_actions_after_fence": 0, "duplicate_assignments": 0, "capacity_before": 5, "capacity_after": 5, "capacity_conserved": true },
+    "evidence": { "status": "PASS", "redacted": true, "secret_fields": 0, "raw_payloads": 0, "permissions": "0600", "atomic_write": true, "bounded": true, "destructive_operations": 0, "cloud_calls": 0 }
+  }
+}

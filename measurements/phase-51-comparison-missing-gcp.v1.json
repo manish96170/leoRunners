@@ -1,0 +1,12 @@
+{
+  "schema_version": "phase-51.v1",
+  "comparison_id": "phase-51-missing-001",
+  "expected_providers": ["aws", "gcp"],
+  "reference_provider": "aws",
+  "metrics": ["startup_ms", "lifecycle_ms", "cache_hit_rate_percent", "network_ms", "cost_usd"],
+  "regression_thresholds_percent": {"startup_ms": 20, "lifecycle_ms": 20, "cache_hit_rate_percent": 10, "network_ms": 20, "cost_usd": 25},
+  "claim_policy": "bounded-evidence-only",
+  "real_world_claim": false,
+  "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"},
+  "samples": [{"provider": "aws", "sample_id": "aws-01", "provenance": {"source": "offline-fixture", "evidence_level": "fixture", "execution_class": "synthetic"}, "values": {"startup_ms": 100, "lifecycle_ms": 500, "cache_hit_rate_percent": 80, "network_ms": 40, "cost_usd": 0.02}}]
+}

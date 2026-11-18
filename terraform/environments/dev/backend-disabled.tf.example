@@ -1,0 +1,8 @@
+# Terraform has no declarative backend-disabled setting. Keep this file as an
+# example only and initialize this composition with:
+#
+#   terraform init -backend=false
+#
+# The example is intentionally not named *.tf, so it cannot silently affect
+# initialization. Use a reviewed remote backend in a separate root before any
+# shared or production apply.

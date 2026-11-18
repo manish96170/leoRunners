@@ -1,0 +1,15 @@
+{
+  "apiVersion": "validation.leorunners.io/v1",
+  "kind": "ApprovedValidationScope",
+  "metadata": { "name": "unsafe-bounds-scope", "version": "1.0.0" },
+  "spec": {
+    "provider": "azure",
+    "region": "INVALID_REGION!",
+    "project": "",
+    "repository": "not-a-repository",
+    "resource_prefix": "Bad_Prefix",
+    "max_resources": 101,
+    "deadline": "yesterday",
+    "ownership": { "notification": "", "rollback": "" }
+  }
+}

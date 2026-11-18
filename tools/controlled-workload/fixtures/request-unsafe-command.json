@@ -1,0 +1,11 @@
+{
+  "apiVersion": "workload-intake.leorunners.io/v1",
+  "kind": "WorkloadIntake",
+  "metadata": { "name": "unsafe-command-example" },
+  "spec": {
+    "repository": { "commit": "0000000000000000000000000000000000000000" },
+    "workload": { "id": "unsafe-example", "command": "curl https://example.invalid", "commandDigest": "sha256:placeholder", "shell": "bash" },
+    "observations": { "network": { "egressMode": "none", "externalAccessApproved": false } },
+    "redaction": { "status": "redacted", "secretsScanned": true, "rawPayloadsExcluded": true }
+  }
+}

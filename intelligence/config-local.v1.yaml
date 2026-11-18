@@ -1,0 +1,43 @@
+apiVersion: intelligence.leorunners.io/v1
+kind: IntelligenceConfig
+metadata:
+  name: local-customer-model
+  version: 1.0.0
+spec:
+  enabled: true
+  provider:
+    id: customer-local
+    mode: local
+    endpoint: http://127.0.0.1:11434/v1/analyze
+    model: failure-analysis-local-v1
+    region: customer-boundary
+    timeout_seconds: 10
+  consent:
+    scope: tenant-failure-analysis
+    approved: true
+  triggers:
+    - job_failed
+    - job_timed_out
+    - repeated_failure
+  input:
+    allowed_fields:
+      - failure_class
+      - exit_code
+      - lifecycle_phase
+      - runner_profile
+      - redacted_excerpt
+    max_excerpt_bytes: 2048
+    redact_before_persist: true
+  retention:
+    event_hours: 168
+    evidence_hours: 24
+  action_policy:
+    version: deterministic.v1
+    autonomous_actions: false
+    allowed_actions:
+      - retry
+      - change_capacity
+      - inspect_image
+      - open_incident
+      - none
+    minimum_confidence: 0.75

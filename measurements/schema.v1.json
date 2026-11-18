@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leo-runners.dev/schemas/measurements.v1.json",
+  "title": "Leo Runners cache, network, startup, and cost measurement evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "measurements.leorunners.io/v1" },
+    "kind": { "const": "MeasurementEvidence" },
+    "metadata": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{2,63}$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }
+    },
+    "spec": {
+      "type": "object", "additionalProperties": false,
+      "required": ["measurement_id", "provenance", "identity", "comparability", "cache", "network", "startup", "cost", "redaction"],
+      "properties": {
+        "measurement_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$" },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "identity": { "$ref": "#/$defs/identity" },
+        "comparability": { "$ref": "#/$defs/comparability" },
+        "cache": { "$ref": "#/$defs/cache" },
+        "network": { "$ref": "#/$defs/network" },
+        "startup": { "$ref": "#/$defs/startup" },
+        "cost": { "$ref": "#/$defs/cost" },
+        "redaction": { "$ref": "#/$defs/redaction" }
+      }
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["collected_at", "collector", "collector_version", "source", "evidence_level", "execution_class"],
+      "properties": {
+        "collected_at": { "type": "string", "format": "date-time" },
+        "collector": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "collector_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "source": { "enum": ["offline-fixture", "controlled-run", "aws-run", "gcp-run"] },
+        "evidence_level": { "enum": ["fixture", "measured", "attested"] },
+        "execution_class": { "enum": ["synthetic", "real"] }
+      }
+    },
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["workload_id", "workload_version", "workload_commit", "provider", "region", "architecture", "runner_profile", "cache_mode", "network_profile"],
+      "properties": {
+        "workload_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+        "workload_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "workload_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "provider": { "enum": ["aws", "gcp", "offline"] },
+        "region": { "type": "string", "pattern": "^[a-z0-9-]{2,32}$" },
+        "architecture": { "enum": ["amd64", "arm64"] },
+        "runner_profile": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "cache_mode": { "enum": ["disabled", "cold", "warm", "observe-only", "enabled"] },
+        "network_profile": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" }
+      }
+    },
+    "comparability": {
+      "type": "object", "additionalProperties": false,
+      "required": ["comparison_id", "protocol_id", "sample_count", "warmup_count", "unit_system", "pricing_source"],
+      "properties": {
+        "comparison_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+        "protocol_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "sample_count": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "warmup_count": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "unit_system": { "const": "si" },
+        "pricing_source": { "enum": ["fixture", "aws-pricing-api", "gcp-pricing-api", "invoice"] },
+        "comparison_key": { "type": "string", "pattern": "^[a-zA-Z0-9._|:-]{3,200}$" }
+      }
+    },
+    "cache": {
+      "type": "object", "additionalProperties": false,
+      "required": ["backend", "namespace", "key_scheme", "operations", "hit_rate"],
+      "properties": {
+        "backend": { "enum": ["memory", "s3", "disabled"] },
+        "namespace": {
+          "type": "object", "additionalProperties": false,
+          "required": ["tenant_ref", "namespace_ref", "prefix_ref"],
+          "properties": {
+            "tenant_ref": { "type": "string", "pattern": "^ref:[a-z0-9-]{3,64}$" },
+            "namespace_ref": { "type": "string", "pattern": "^ref:[a-z0-9-]{3,64}$" },
+            "prefix_ref": { "type": "string", "pattern": "^ref:[a-z0-9-]{3,128}$" }
+          }
+        },
+        "key_scheme": { "enum": ["sha256-content-addressed", "disabled"] },
+        "operations": {
+          "type": "object", "additionalProperties": false,
+          "required": ["lookup_count", "hit_count", "miss_count", "save_count", "restore_count", "invalidation_count"],
+          "properties": {
+            "lookup_count": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+            "hit_count": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+            "miss_count": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+            "save_count": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+            "restore_count": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+            "invalidation_count": { "type": "integer", "minimum": 0, "maximum": 1000000000 }
+          }
+        },
+        "hit_rate": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "network": {
+      "type": "object", "additionalProperties": false,
+      "required": ["egress_mode", "endpoint_mode", "nat_gateway", "vpc_endpoint", "egress"],
+      "properties": {
+        "egress_mode": { "enum": ["nat", "vpc-endpoint", "hybrid", "approved-proxy"] },
+        "endpoint_mode": { "enum": ["none", "gateway", "interface", "gateway-and-interface"] },
+        "nat_gateway": { "$ref": "#/$defs/trafficCost" },
+        "vpc_endpoint": { "$ref": "#/$defs/trafficCost" },
+        "egress": { "$ref": "#/$defs/trafficCost" }
+      }
+    },
+    "trafficCost": {
+      "type": "object", "additionalProperties": false,
+      "required": ["enabled", "bytes", "unit", "cost_usd"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "bytes": { "type": "integer", "minimum": 0, "maximum": 1000000000000000 },
+        "unit": { "const": "bytes" },
+        "cost_usd": { "type": "number", "minimum": 0, "maximum": 1000000000 }
+      }
+    },
+    "startup": {
+      "type": "object", "additionalProperties": false,
+      "required": ["unit", "phases", "total_ms"],
+      "properties": {
+        "unit": { "const": "milliseconds" },
+        "phases": {
+          "type": "array", "minItems": 4, "maxItems": 8,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["name", "duration_ms", "status"],
+            "properties": {
+              "name": { "enum": ["provision", "boot", "registration", "ready", "total"] },
+              "duration_ms": { "type": "integer", "minimum": 0, "maximum": 86400000 },
+              "status": { "enum": ["measured", "estimated", "not_applicable"] }
+            }
+          }
+        },
+        "total_ms": { "type": "integer", "minimum": 0, "maximum": 86400000 }
+      }
+    },
+    "cost": {
+      "type": "object", "additionalProperties": false,
+      "required": ["currency", "compute_usd", "storage_usd", "network_usd", "total_usd", "assumptions", "pricing_as_of"],
+      "properties": {
+        "currency": { "const": "USD" },
+        "compute_usd": { "type": "number", "minimum": 0 },
+        "storage_usd": { "type": "number", "minimum": 0 },
+        "network_usd": { "type": "number", "minimum": 0 },
+        "total_usd": { "type": "number", "minimum": 0 },
+        "assumptions": {
+          "type": "object", "additionalProperties": false,
+          "required": ["compute_rate_usd_per_hour", "storage_rate_usd_per_gb_month", "nat_rate_usd_per_gb", "endpoint_rate_usd_per_gb", "runtime_hours", "storage_gb"],
+          "properties": {
+            "compute_rate_usd_per_hour": { "type": "number", "minimum": 0 },
+            "storage_rate_usd_per_gb_month": { "type": "number", "minimum": 0 },
+            "nat_rate_usd_per_gb": { "type": "number", "minimum": 0 },
+            "endpoint_rate_usd_per_gb": { "type": "number", "minimum": 0 },
+            "runtime_hours": { "type": "number", "minimum": 0 },
+            "storage_gb": { "type": "number", "minimum": 0 }
+          }
+        },
+        "pricing_as_of": { "type": "string", "format": "date-time" }
+      }
+    },
+    "redaction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "secrets_scanned", "raw_payloads_excluded", "identifiers_hashed"],
+      "properties": {
+        "status": { "const": "redacted" },
+        "secrets_scanned": { "const": true },
+        "raw_payloads_excluded": { "const": true },
+        "identifiers_hashed": { "const": true }
+      }
+    }
+  }
+}

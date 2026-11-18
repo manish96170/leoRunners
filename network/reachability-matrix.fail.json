@@ -1,0 +1,13 @@
+{
+  "apiVersion": "network.leorunners.io/v1",
+  "kind": "ReachabilityMatrix",
+  "metadata": {"name": "fixture-fail", "version": "1.0.0"},
+  "spec": {
+    "subnetClass": "public",
+    "dns": {"mode": "public-resolver", "required": true, "resolverTargets": []},
+    "egress": {"mode": "direct-internet", "allowedModes": ["nat"], "tlsRequired": false, "maxDnsMs": 0, "maxConnectMs": 0, "maxRequestMs": 0},
+    "destinations": [{"id": "bad", "hostname": "https://secret.example.invalid/token", "port": 80, "protocol": "http", "required": true, "path": "//bad", "allowedEgressModes": ["direct-internet"]}],
+    "isolation": {"inbound": "allow", "publicIp": true, "metadataImdsv2": false, "untrustedForks": "shared"},
+    "cost": {"currency": "USD", "labels": {"direct-internet": []}, "billingReconciliationRequired": false}
+  }
+}

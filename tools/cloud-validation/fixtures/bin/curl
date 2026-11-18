@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+printf 'curl endpoint=' >>"${CLOUD_VALIDATION_MOCK_LOG:?}"
+endpoint=
+output=
+status=200
+previous=
+for arg do
+    case "$previous" in
+        -o) output=$arg ;;
+    esac
+    case "$arg" in
+        http://*|https://*) endpoint=$arg ;;
+        -o) previous=-o; continue ;;
+        *) ;;
+    esac
+    previous=
+done
+printf '%s\n' "$endpoint" >>"${CLOUD_VALIDATION_MOCK_LOG:?}"
+case "$endpoint" in
+    */generate-jitconfig) status=201; body='{"encoded_jit_config":"fixture-secret-token"}' ;;
+    *) body='{"id":1,"name":"fixture"}' ;;
+esac
+[ -n "$output" ] && printf '%s\n' "$body" >"$output"
+printf '%s' "$status"

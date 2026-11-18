@@ -1,0 +1,21 @@
+{
+  "action": "queued",
+  "workflow_job": {
+    "id": 7001,
+    "run_id": 8001,
+    "run_attempt": 1,
+    "name": "offline-smoke",
+    "workflow_name": "Smoke",
+    "labels": ["self-hosted", "linux", "x64"],
+    "repository": {
+      "id": 9001,
+      "full_name": "smoke/example",
+      "name": "example"
+    }
+  },
+  "repository": {
+    "id": 9001,
+    "full_name": "smoke/example",
+    "name": "example"
+  }
+}

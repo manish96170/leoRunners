@@ -1,0 +1,16 @@
+{
+  "apiVersion": "validation.leorunners.io/v1",
+  "kind": "PreflightEvidence",
+  "metadata": { "name": "unsafe-preflight", "version": "1.0.0" },
+  "spec": {
+    "run": { "run_id": "preflight-unsafe", "mode": "read_only_preflight", "started_at": "2026-09-13T08:20:00Z", "finished_at": "2026-09-13T08:20:01Z", "duration_ms": 1000, "outcome": "failed" },
+    "provider": { "name": "aws", "region": "ap-south-1", "account_scope": "configured-account", "resource_scope": ["identity"] },
+    "observability": {
+      "metrics": { "status": "unavailable", "checked_at": "2026-09-13T08:20:01Z", "reason": "failed" },
+      "logs": { "status": "not_checked", "checked_at": "2026-09-13T08:20:01Z", "reason": "failed" },
+      "alarms": { "status": "not_checked", "checked_at": "2026-09-13T08:20:01Z", "reason": "failed" },
+      "dashboards": { "status": "not_checked", "checked_at": "2026-09-13T08:20:01Z", "reason": "failed" }
+    },
+    "cleanup": { "attempted": false, "completed": false, "resource_refs": [], "verified_at": "2026-09-13T08:20:01Z" }
+  }
+}

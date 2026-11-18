@@ -1,0 +1,26 @@
+.git
+.github
+.DS_Store
+
+# Local state, credentials, and environment files must never enter an image.
+.env
+.env.*
+*.pem
+*.key
+*credentials*
+*accessKeys*
+state.json
+state.json.bak
+*.log
+
+# Development and generated artifacts are not needed by the controller image.
+ami
+benchmarks
+intelligence
+workloads
+tools
+bootstrap
+docs
+*.md
+**/*_test.go
+**/testdata

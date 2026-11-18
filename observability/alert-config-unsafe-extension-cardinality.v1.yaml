@@ -1,0 +1,21 @@
+apiVersion: observability.leorunners.io/v1
+kind: AlertConfig
+metadata:
+  name: unsafe-extension-cardinality
+  version: 1.0.0
+spec:
+  enabled: true
+  namespace: LeoRunners/Controller
+  dimensions: [extension, invocation_id]
+  alerts:
+    - name: extension-failure-invocation
+      enabled: true
+      metric: extension_failures_total
+      statistic: Sum
+      comparison: GreaterThanThreshold
+      threshold: 0
+      period_seconds: 60
+      evaluation_periods: 1
+      severity: critical
+      dimensions: [extension, invocation_id]
+      actions: [notify_oncall]

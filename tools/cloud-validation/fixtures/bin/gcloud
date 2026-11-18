@@ -1,0 +1,36 @@
+#!/bin/sh
+set -eu
+printf 'gcloud %s\n' "$*" >>"${CLOUD_VALIDATION_MOCK_LOG:?}"
+gcp_state=${CLOUD_VALIDATION_GCP_INSTANCE_STATE:-}
+case "$*" in
+    --version*) printf '%s\n' 'Google Cloud SDK 500.0.0' ;;
+    *'auth application-default print-access-token'*) printf '%s\n' 'fixture-access-token' ;;
+    *'config get-value project'*) printf '%s\n' 'fixture-project' ;;
+    *'projects describe'*) printf '%s\n' 'fixture-project' ;;
+    *'compute zones describe'*) printf '%s\n' 'us-central1-a' ;;
+    *'instance-templates describe'*'value(name)'*) printf '%s\n' 'fixture-template' ;;
+    *'instance-templates describe'*'sourceImage'*)
+        if [ "${CLOUD_VALIDATION_MOCK_UNSAFE_IMAGE:-0}" = 1 ]; then printf '%s\n' 'projects/fixture/global/snapshots/not-an-image'; else printf '%s\n' 'projects/fixture/global/images/fixture-image'; fi
+        ;;
+    *'instances create'*)
+        [ -n "$gcp_state" ] && printf '%s\n' created >"$gcp_state"
+        printf '%s\n' 'created'
+        ;;
+    *'instances describe'*'labels.purpose'*)
+        if [ "${CLOUD_VALIDATION_MOCK_UNSAFE_LABELS:-0}" = 1 ]; then printf '%s\n' 'wrong-purpose'; else printf '%s\n' 'leo-cloud-validation'; fi
+        ;;
+    *'instances describe'*'labels.ephemeral'*)
+        if [ "${CLOUD_VALIDATION_MOCK_UNSAFE_LABELS:-0}" = 1 ]; then printf '%s\n' 'false'; else printf '%s\n' 'true'; fi
+        ;;
+    *'instances describe'*)
+        if [ "${CLOUD_VALIDATION_MOCK_DISCOVERY_FAIL:-0}" = 1 ]; then printf '%s\n' 'INTERNAL_ERROR' >&2; exit 1; fi
+        if [ -n "$gcp_state" ] && [ "$(cat "$gcp_state" 2>/dev/null || true)" = deleted ]; then printf '%s\n' 'NOT_FOUND' >&2; exit 1; fi
+        printf '%s\n' 'fixture-instance'
+        ;;
+    *'instances delete'*)
+        if [ "${CLOUD_VALIDATION_MOCK_CLEANUP_FAIL:-0}" = 1 ]; then exit 1; fi
+        [ -n "$gcp_state" ] && printf '%s\n' deleted >"$gcp_state"
+        printf '%s\n' 'deleted'
+        ;;
+    *) exit 0 ;;
+esac

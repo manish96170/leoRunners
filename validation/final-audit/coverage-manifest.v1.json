@@ -1,0 +1,14 @@
+{
+  "apiVersion": "final-audit-coverage.leorunners.io/v1",
+  "kind": "OfflineCoverageManifest",
+  "checks": [
+    {"name": "controller-tests", "path": "controller", "command": "go test ./...", "environment_gated": false},
+    {"name": "configuration-validator", "path": "tools/config-validation/test.sh", "command": "test", "environment_gated": false},
+    {"name": "cloud-validation", "path": "tools/cloud-validation/test.sh", "command": "test", "environment_gated": false},
+    {"name": "github-validation", "path": "tools/github-validation/test.sh", "command": "test", "environment_gated": false},
+    {"name": "ami-benchmark", "path": "tools/ami-benchmark/test.sh", "command": "test", "environment_gated": false},
+    {"name": "measurement-validation", "path": "tools/measurement-validation/test.sh", "command": "test", "environment_gated": false},
+    {"name": "multicloud-comparison", "path": "tools/multicloud-comparison/test.sh", "command": "test", "environment_gated": false},
+    {"name": "terraform-validation", "path": "tools/terraform-validation/test.sh", "command": "test", "environment_gated": true}
+  ]
+}

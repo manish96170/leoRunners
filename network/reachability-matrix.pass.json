@@ -1,0 +1,13 @@
+{
+  "apiVersion": "network.leorunners.io/v1",
+  "kind": "ReachabilityMatrix",
+  "metadata": {"name": "fixture-pass", "version": "1.0.0"},
+  "spec": {
+    "subnetClass": "private",
+    "dns": {"mode": "cloud-resolver", "required": true, "resolverTargets": ["169.254.169.253"]},
+    "egress": {"mode": "vpc-endpoint", "allowedModes": ["nat", "vpc-endpoint"], "tlsRequired": true, "maxDnsMs": 1500, "maxConnectMs": 5000, "maxRequestMs": 15000},
+    "destinations": [{"id": "aws-s3", "hostname": "s3.us-east-1.amazonaws.com", "port": 443, "protocol": "https", "required": true, "path": "/", "allowedEgressModes": ["vpc-endpoint"]}],
+    "isolation": {"inbound": "deny", "publicIp": false, "metadataImdsv2": true, "untrustedForks": "separate-trust-boundary"},
+    "cost": {"currency": "USD", "labels": {"vpc-endpoint": ["gateway-endpoint-route-scope"]}, "billingReconciliationRequired": true}
+  }
+}

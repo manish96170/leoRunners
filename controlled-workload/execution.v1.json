@@ -1,0 +1,24 @@
+{
+  "apiVersion": "controlled-workload.leorunners.io/v1",
+  "kind": "ControlledWorkloadExecution",
+  "metadata": { "name": "controller-ci-execution", "version": "1.0.0" },
+  "spec": {
+    "request": {
+      "repository": { "url": "https://github.com/manish96170/leoRunners", "commit": "3d8acb1904854728572e7f45459255f7f2113858", "cleanCheckout": true },
+      "allowlist": { "commands": ["go"] },
+      "commands": [
+        { "id": "controller-tests", "argv": ["go", "test", "./..."], "cwd": "controller", "timeoutSeconds": 900, "commandDigest": "sha256:641077b9ce8287a24483a198d4fa91614c2f5dd22b5982c6207b02c2ba848cf9", "allowlisted": true }
+      ],
+      "limits": { "totalTimeoutSeconds": 1200, "maxOutputBytes": 10485760, "maxDiskBytes": 1073741824, "maxProcesses": 32 },
+      "environment": { "variables": ["CI", "GOFLAGS"], "valuesRedacted": true, "secretsExcluded": true },
+      "network": { "mode": "none", "enabled": false, "approved": false },
+      "provenance": { "source": "controlled-intake", "manifestDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "toolchain": ["go@1.27.1"], "requestedBy": "platform-owner", "approvalRef": "req-phase61-execution" },
+      "cleanup": { "required": true, "workspaceRemoval": true, "processReaping": true, "artifactRedaction": true }
+    },
+    "evidence": {
+      "status": "complete", "commit": "3d8acb1904854728572e7f45459255f7f2113858", "startedAt": "2026-09-14T01:00:00Z", "finishedAt": "2026-09-14T01:08:00Z", "exitCode": 0, "outputBytes": 4821, "diskBytes": 28467200, "outputDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "cleanup": { "status": "complete", "workspaceRemoved": true, "processesReaped": true, "artifactsRedacted": true },
+      "redaction": { "status": "redacted", "environmentValuesExcluded": true, "rawOutputExcluded": true, "secretsScanned": true }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+apiVersion: intelligence.leorunners.io/v1
+kind: IntelligenceConfig
+metadata:
+  name: disabled
+  version: 1.0.0
+spec:
+  enabled: false
+  provider:
+    id: none
+    mode: disabled
+    endpoint: ""
+  consent:
+    scope: none
+    approved: false
+  triggers: []
+  input:
+    allowed_fields: []
+    max_excerpt_bytes: 0
+    redact_before_persist: true
+  retention:
+    event_hours: 168
+    evidence_hours: 0
+  action_policy:
+    version: deterministic.v1
+    autonomous_actions: false
+    allowed_actions:
+      - none
+    minimum_confidence: 1.0

@@ -1,0 +1,10 @@
+{
+  "apiVersion": "events.leorunners.io/v1",
+  "kind": "EventSinkBehaviorEvidence",
+  "metadata": {"name": "unsafe-fixture", "version": "1.0.0", "token": "do-not-use"},
+  "scenarios": [
+    {"name": "duplicate_delivery", "delivery": {"deduplication_key": "same", "attempts": 2, "persisted_records": 2, "processed_records": 2, "acknowledgements": 2}, "expected": {"idempotent": false, "duplicate_suppressed": false, "ack_after_persist": false}},
+    {"name": "read_only_replay", "replay": {"selected_events": 1, "emitted_events": 1, "preserved_event_ids": false, "lifecycle_side_effects": 1, "bounded": false}, "expected": {"read_only": false, "side_effects_forbidden": false}},
+    {"name": "queue_overflow", "queue": {"capacity": 1, "submitted": 2, "persisted": 1, "dropped": 0, "drop_reason": "blocked", "cleanup_blocked": true}, "expected": {"drop_measured": false, "bounded": false, "cleanup_unblocked": false}}
+  ]
+}

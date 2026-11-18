@@ -1,0 +1,4 @@
+spec:
+  enabled: false
+  provider:
+    mode: disabled

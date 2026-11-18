@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leorunners.io/schemas/controlled-workload-execution.v1.json",
+  "title": "Leo Runners Controlled Workload Execution",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "controlled-workload.leorunners.io/v1" },
+    "kind": { "const": "ControlledWorkloadExecution" },
+    "metadata": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }
+    },
+    "spec": {
+      "type": "object", "additionalProperties": false,
+      "required": ["request", "evidence"],
+      "properties": {
+        "request": {
+          "type": "object", "additionalProperties": false,
+          "required": ["repository", "allowlist", "commands", "limits", "environment", "network", "provenance", "cleanup"],
+          "properties": {
+            "repository": {
+              "type": "object", "additionalProperties": false,
+              "required": ["url", "commit", "cleanCheckout"],
+              "properties": {
+                "url": { "type": "string", "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+                "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+                "cleanCheckout": { "const": true }
+              }
+            },
+            "allowlist": {
+              "type": "object", "additionalProperties": false,
+              "required": ["commands"],
+              "properties": {
+                "commands": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._+/-]{0,63}$" } }
+              }
+            },
+            "commands": {
+              "type": "array", "minItems": 1, "maxItems": 8,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["id", "argv", "cwd", "timeoutSeconds", "commandDigest", "allowlisted"],
+                "properties": {
+                  "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,31}$" },
+                  "argv": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "minLength": 1, "maxLength": 160 } },
+                  "cwd": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9_.@/-]+$" },
+                  "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
+                  "commandDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+                  "allowlisted": { "const": true }
+                }
+              }
+            },
+            "limits": {
+              "type": "object", "additionalProperties": false,
+              "required": ["totalTimeoutSeconds", "maxOutputBytes", "maxDiskBytes", "maxProcesses"],
+              "properties": {
+                "totalTimeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 7200 },
+                "maxOutputBytes": { "type": "integer", "minimum": 1024, "maximum": 1073741824 },
+                "maxDiskBytes": { "type": "integer", "minimum": 1048576, "maximum": 10737418240 },
+                "maxProcesses": { "type": "integer", "minimum": 1, "maximum": 128 }
+              }
+            },
+            "environment": {
+              "type": "object", "additionalProperties": false,
+              "required": ["variables", "valuesRedacted", "secretsExcluded"],
+              "properties": {
+                "variables": { "type": "array", "maxItems": 64, "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" } },
+                "valuesRedacted": { "const": true },
+                "secretsExcluded": { "const": true }
+              }
+            },
+            "network": {
+              "type": "object", "additionalProperties": false,
+              "required": ["mode", "enabled", "approved"],
+              "properties": {
+                "mode": { "enum": ["none", "approved-egress"] },
+                "enabled": { "type": "boolean" },
+                "approved": { "type": "boolean" },
+                "approvalRef": { "type": "string", "pattern": "^req-[a-z0-9][a-z0-9-]{7,63}$" }
+              }
+            },
+            "provenance": {
+              "type": "object", "additionalProperties": false,
+              "required": ["source", "manifestDigest", "toolchain", "requestedBy", "approvalRef"],
+              "properties": {
+                "source": { "enum": ["controlled-intake", "offline-fixture"] },
+                "manifestDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+                "toolchain": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._+-]{1,63}@[0-9]+\\.[0-9]+\\.[0-9]+$" } },
+                "requestedBy": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$" },
+                "approvalRef": { "type": "string", "pattern": "^req-[a-z0-9][a-z0-9-]{7,63}$" }
+              }
+            },
+            "cleanup": {
+              "type": "object", "additionalProperties": false,
+              "required": ["required", "workspaceRemoval", "processReaping", "artifactRedaction"],
+              "properties": {
+                "required": { "const": true },
+                "workspaceRemoval": { "const": true },
+                "processReaping": { "const": true },
+                "artifactRedaction": { "const": true }
+              }
+            }
+          }
+        },
+        "evidence": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "commit", "startedAt", "finishedAt", "exitCode", "outputBytes", "diskBytes", "outputDigest", "cleanup", "redaction"],
+          "properties": {
+            "status": { "enum": ["complete", "failed", "blocked"] },
+            "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "startedAt": { "type": "string", "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+            "finishedAt": { "type": "string", "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+            "exitCode": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "outputBytes": { "type": "integer", "minimum": 0 },
+            "diskBytes": { "type": "integer", "minimum": 0 },
+            "outputDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "cleanup": {
+              "type": "object", "additionalProperties": false,
+              "required": ["status", "workspaceRemoved", "processesReaped", "artifactsRedacted"],
+              "properties": {
+                "status": { "const": "complete" },
+                "workspaceRemoved": { "const": true },
+                "processesReaped": { "const": true },
+                "artifactsRedacted": { "const": true }
+              }
+            },
+            "redaction": {
+              "type": "object", "additionalProperties": false,
+              "required": ["status", "environmentValuesExcluded", "rawOutputExcluded", "secretsScanned"],
+              "properties": {
+                "status": { "const": "redacted" },
+                "environmentValuesExcluded": { "const": true },
+                "rawOutputExcluded": { "const": true },
+                "secretsScanned": { "const": true }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

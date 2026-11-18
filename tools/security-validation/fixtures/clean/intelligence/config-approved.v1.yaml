@@ -1,0 +1,4 @@
+spec:
+  enabled: true
+  consent:
+    approved: true

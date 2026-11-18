@@ -1,0 +1,16 @@
+{
+  "apiVersion": "final-audit-manifest.leorunners.io/v1",
+  "kind": "PhaseManifest",
+  "target_completed_phase": 53,
+  "tracked_phase_source": "PLAN.md",
+  "phase_markers": {
+    "46": ["tools/config-validation/validate.sh"],
+    "47": ["tools/cloud-validation/validate.sh"],
+    "48": ["tools/github-validation/validate.sh"],
+    "49": ["tools/ami-benchmark"],
+    "50": ["tools/measurement-validation/validate.sh"],
+    "51": ["tools/multicloud-comparison/validate.sh"],
+    "52": ["tools/event-sink-validation/validate.sh"],
+    "53": ["tools/terraform-validation/validate.sh"]
+  }
+}

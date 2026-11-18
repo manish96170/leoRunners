@@ -1,0 +1,42 @@
+{
+  "apiVersion": "events.leorunners.io/v1",
+  "kind": "EventSinkContract",
+  "metadata": {"name": "controller-events", "version": "1.0.0"},
+  "spec": {
+    "enabled": true,
+    "transport": "local-jsonl",
+    "delivery": {
+      "ack_mode": "persist_before_ack",
+      "idempotency_key": "delivery.deduplicationKey",
+      "max_attempts": 5,
+      "retry_backoff_seconds": 30,
+      "queue_capacity": 1024,
+      "overflow": "drop",
+      "dead_letter": {"enabled": true, "max_items": 1024}
+    },
+    "archive": {
+      "path": "/var/lib/leo-runners/events.jsonl",
+      "file_mode": "0600",
+      "owner_only": true,
+      "restart_behavior": "reopen_append",
+      "max_line_bytes": 1048576,
+      "max_bytes": 1073741824,
+      "max_files": 7,
+      "max_age_seconds": 604800
+    },
+    "redaction": {
+      "required": true,
+      "mode": "metadata-only",
+      "max_bytes": 262144,
+      "forbidden_fields": ["token", "secret", "password", "credentials", "logs", "stdout", "stderr", "environment"]
+    },
+    "replay": {
+      "enabled": true,
+      "max_events": 10000,
+      "max_window_seconds": 604800,
+      "preserve_event_id": true,
+      "side_effects": "forbidden",
+      "mode": "read_only"
+    }
+  }
+}

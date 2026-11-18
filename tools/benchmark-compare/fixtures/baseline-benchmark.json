@@ -1,0 +1,4 @@
+[
+  {"id":"fake-0001","durations":{"queue":100000000,"launch":4000000000,"boot":12000000000,"registration":3000000000,"ready":8000000000,"job_start":2000000000,"cleanup":1000000000}},
+  {"id":"fake-0002","durations":{"queue":110000000,"launch":4100000000,"boot":12100000000,"registration":3100000000,"ready":8100000000,"job_start":2100000000,"cleanup":1100000000}}
+]

@@ -1,0 +1,8 @@
+{
+  "schema_version": "workload-validation.v1",
+  "id": "run-candidate-1",
+  "mode": "command",
+  "duration": 10500000000,
+  "platform_timings": {"queue": 100000000, "launch": 2200000000, "boot": 3000000000},
+  "workload_timings": {"build": 2200000000, "tests": 3000000000}
+}

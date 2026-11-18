@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leorunners.invalid/schemas/events.v1.json",
+  "title": "Leo Runners lifecycle event envelope v1",
+  "description": "Append-only replayable lifecycle events. Extensions are observational and cannot control scheduling or cleanup.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "eventId", "eventType", "occurredAt", "sequence", "source", "subject", "delivery", "retention", "data"],
+  "properties": {
+    "apiVersion": {"const": "events.leorunners.io/v1"},
+    "kind": {"const": "LifecycleEvent"},
+    "eventId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$"},
+    "eventType": {"enum": ["job.queued", "job.started", "job.completed", "job.failed", "job.cancelled", "runner.provisioning", "runner.ready", "runner.busy", "runner.terminating", "runner.terminated", "runner.failed"]},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "sequence": {"type": "integer", "minimum": 0},
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["component", "version"],
+      "properties": {
+        "component": {"type": "string", "enum": ["controller", "scheduler", "provider", "github", "reconciler", "reaper"]},
+        "version": {"type": "string", "minLength": 1},
+        "provider": {"type": "string", "minLength": 1}
+      }
+    },
+    "subject": {
+      "type": "object", "additionalProperties": false, "required": ["tenantId", "jobId"],
+      "properties": {
+        "tenantId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$"},
+        "jobId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$"},
+        "runnerId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$"},
+        "repository": {"type": "string", "minLength": 1},
+        "runId": {"type": "string", "minLength": 1}
+      }
+    },
+    "delivery": {
+      "type": "object", "additionalProperties": false, "required": ["deduplicationKey", "replayKey", "attempt"],
+      "properties": {
+        "deduplicationKey": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:/-]{2,255}$"},
+        "replayKey": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:/-]{2,255}$"},
+        "attempt": {"type": "integer", "minimum": 1},
+        "causationId": {"type": "string", "minLength": 1}
+      }
+    },
+    "retention": {
+      "type": "object", "additionalProperties": false, "required": ["expiresAt", "redacted"],
+      "properties": {
+        "expiresAt": {"type": "string", "format": "date-time"},
+        "redacted": {"const": true},
+        "evidenceClass": {"enum": ["metadata", "operational", "diagnostic"]}
+      }
+    },
+    "data": {
+      "type": "object", "additionalProperties": false, "required": ["status"],
+      "properties": {
+        "status": {"type": "string", "enum": ["queued", "provisioning", "ready", "busy", "running", "completed", "failed", "cancelled", "terminating", "terminated"]},
+        "reason": {"type": "string", "maxLength": 512},
+        "provider": {"type": "string", "maxLength": 128},
+        "durationMs": {"type": "integer", "minimum": 0},
+        "exitCode": {"type": ["integer", "null"], "minimum": 0},
+        "labels": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+        "extensions": {
+          "type": "object", "maxProperties": 16,
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_.-]{0,63}$"},
+          "additionalProperties": {"type": ["string", "number", "boolean", "null"]}
+        }
+      }
+    }
+  }
+}
+

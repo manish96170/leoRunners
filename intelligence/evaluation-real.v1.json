@@ -1,0 +1,14 @@
+{
+  "version": "intelligence-evaluation.v1",
+  "dataset_id": "redacted-historical-sample",
+  "provenance": "real",
+  "ai_enabled": false,
+  "policy_version": "deterministic.v1",
+  "telemetry": [
+    {"id":"hist-001","provider":"aws","region":"us-east-1","outcome":"success","cache_observed":true,"cache_hit":true,"timings_ms":{"queue":240,"boot":1100},"resources":{"cpu":4,"memory_gb":8,"gpu":0}},
+    {"id":"hist-002","provider":"aws","region":"us-east-1","outcome":"failure","cache_observed":true,"cache_hit":false,"timings_ms":{"queue":310,"boot":1250},"resources":{"cpu":4,"memory_gb":8,"gpu":0}}
+  ],
+  "cases": [
+    {"id":"hist-failure-001","log":"dependency resolution failed; redacted excerpt","max_log_bytes":96,"expected_action":"annotate","expected_classification":"dependency-failure","expected_accepted":true,"response":{"classification":"dependency-failure","recommendations":[{"action":"annotate","rationale":"dependency evidence"}]}}
+  ]
+}
