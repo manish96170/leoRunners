@@ -27,7 +27,10 @@ through a Git source that includes the whole repository package (the
 resolves.
 
 A worked composition with placeholder values is in
-`terraform/examples/aws-customer`.
+`terraform/examples/aws-customer`. A foundation-layer environment (image
+registry, cluster, state, identities, network rules, optional HTTPS gateway) is in
+`terraform/environments/aws-foundation`; the gateway pattern is described in
+[Shared gateway design](aws-shared-gateway-design.md).
 
 ## Phases
 
@@ -106,6 +109,7 @@ The tests use a mocked AWS provider: no credentials, no AWS API calls.
 
 ## Related documents
 
+- [Shared gateway design](aws-shared-gateway-design.md)
 - [Image publication contract](aws-image-publication.md)
 - [Generated IAM policy workflow](aws-iam-policy-workflow.md)
 - [State and secret handling](aws-state-and-secrets.md)

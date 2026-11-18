@@ -1,0 +1,30 @@
+# Non-secret placeholders. Safe to commit: no credentials, secrets, AMIs, GitHub
+# tokens, or live actions. Copy to an owner-only location outside the repository
+# and replace the values only after the network and request scope are approved.
+aws_region  = "us-east-1"
+name_prefix = "leo-runners"
+
+environment  = "example"
+owner        = "example-team"
+repository   = "example-org/example-repo"
+runner_group = "leo-runners-example"
+
+controller_vpc_id   = "vpc-0123456789abcdef0"
+controller_vpc_cidr = "10.0.0.0/16"
+runner_vpc_id       = "vpc-0fedcba9876543210"
+runner_vpc_cidr     = "10.1.0.0/16"
+runner_subnet_ids   = ["subnet-0123456789abcdef0"]
+
+# Keep null until iam-policy-autopilot output is reviewed. This prevents an
+# accidental controller runtime from receiving unreviewed AWS permissions.
+controller_generated_policy_json = null
+
+# The gateway ALB and certificate are bootstrapped outside this composition and
+# adopted by ARN only after reviewing the gateway-only plan. The enabled plan
+# creates an HTTPS listener that returns a fixed 404 until a service adds its
+# own target group and route.
+enable_https_gateway              = false
+gateway_alb_arn                   = null
+gateway_alb_security_group_id     = null
+gateway_certificate_arn           = null
+gateway_https_ingress_cidr_blocks = []

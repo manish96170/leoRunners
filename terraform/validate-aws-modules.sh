@@ -17,7 +17,7 @@ done
 modules=(aws-ecs-controller aws-shared-gateway aws-ephemeral-runner)
 dirs=()
 for m in "${modules[@]}"; do dirs+=("$root/modules/$m"); done
-dirs+=("$root/examples/aws-customer")
+dirs+=("$root/examples/aws-customer" "$root/environments/aws-foundation")
 
 required=(main.tf variables.tf outputs.tf versions.tf README.md variables.example.tfvars)
 for m in "${modules[@]}"; do
@@ -27,7 +27,7 @@ for m in "${modules[@]}"; do
   ls "$root/modules/$m"/tests/*.tftest.hcl >/dev/null 2>&1 || { printf 'missing tests: modules/%s/tests\n' "$m" >&2; exit 2; }
 done
 
-scan_paths=("$root/modules/aws-ecs-controller" "$root/modules/aws-shared-gateway" "$root/modules/aws-ephemeral-runner" "$root/examples")
+scan_paths=("$root/modules/aws-ecs-controller" "$root/modules/aws-shared-gateway" "$root/modules/aws-ephemeral-runner" "$root/examples" "$root/environments/aws-foundation")
 
 if grep -rEn --exclude-dir=.terraform '(AKIA[0-9A-Z]{16}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,})' "${scan_paths[@]}"; then
   echo 'credential-like material found' >&2
@@ -52,7 +52,7 @@ fi
 
 command -v terraform >/dev/null 2>&1 || { echo 'terraform not installed; static checks passed, skipped terraform checks' >&2; exit 0; }
 
-terraform fmt -check -recursive "$root/modules/aws-ecs-controller" "$root/modules/aws-shared-gateway" "$root/modules/aws-ephemeral-runner" "$root/examples"
+terraform fmt -check -recursive "$root/modules/aws-ecs-controller" "$root/modules/aws-shared-gateway" "$root/modules/aws-ephemeral-runner" "$root/examples" "$root/environments/aws-foundation"
 
 if [[ "$skip_init" == "true" ]]; then
   echo 'static checks passed (init, validate, and tests skipped)'
