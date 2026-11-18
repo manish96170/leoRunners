@@ -27,6 +27,7 @@ first as the target experience, then the gaps they expose are built.
 
 - [x] 2.2a Generic AWS modules: `aws-ecs-controller`, `aws-shared-gateway`, `aws-ephemeral-runner` (contract only), example composition, mocked-provider tests (`terraform/validate-aws-modules.sh`).
 - [x] 2.2b Module docs: `docs/aws-modules.md`, image publication, IAM policy workflow, state and secrets, rollback and cleanup, GitHub runtime contract.
+- [x] 2.2g Generic AWS foundation environment (`terraform/environments/aws-foundation`) and shared gateway design note (`docs/aws-shared-gateway-design.md`).
 - [ ] 2.1 GitHub App auth: App ID + private key, mint short-lived installation tokens through the existing `BearerTokenSource` seam (today only a static `GITHUB_APP_INSTALLATION_TOKEN` exists). See `docs/github-runtime-contract.md`.
 - [ ] 2.2c Runner layer: launch template, runner IAM role and instance profile, runner network, behind the `aws-ephemeral-runner` contract.
 - [ ] 2.2d Publish an official controller image (digest list per release).
