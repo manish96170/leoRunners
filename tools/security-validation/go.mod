@@ -1,3 +1,3 @@
-module github.com/anchor-os/leo-runners/tools/security-validation
+module github.com/leo-runners/ci-platform/tools/security-validation
 
 go 1.27.1
