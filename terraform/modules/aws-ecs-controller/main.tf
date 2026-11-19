@@ -34,10 +34,20 @@ locals {
     var.create_secret_containers ? aws_secretsmanager_secret.webhook[0].arn : var.existing_webhook_secret_arn
   ) : null
 
-  create_github_token_container = local.foundation && var.create_secret_containers && (var.github.jit_enabled || var.create_github_token_secret)
+  # GitHub authentication is either an App (the controller mints its own
+  # tokens from a private key) or an externally rotated installation token.
+  use_github_app   = var.github.jit_enabled && var.github.app != null
+  use_github_token = var.github.jit_enabled && var.github.app == null
 
-  github_token_secret_arn = local.foundation && var.github.jit_enabled ? (
+  create_github_token_container   = local.foundation && var.create_secret_containers && (local.use_github_token || var.create_github_token_secret)
+  create_github_app_key_container = local.foundation && var.create_secret_containers && local.use_github_app
+
+  github_token_secret_arn = local.foundation && local.use_github_token ? (
     var.create_secret_containers ? aws_secretsmanager_secret.github_token[0].arn : var.existing_github_token_secret_arn
+  ) : null
+
+  github_app_private_key_secret_arn = local.foundation && local.use_github_app ? (
+    var.create_secret_containers ? aws_secretsmanager_secret.github_app_key[0].arn : var.existing_github_app_private_key_secret_arn
   ) : null
 
   execution_role_name = var.execution_role_name != null ? var.execution_role_name : "${var.name_prefix}-controller-execution"
@@ -47,7 +57,8 @@ locals {
   # known at plan time even though the ARNs themselves are not.
   secret_arns = concat(
     local.foundation ? [local.webhook_secret_arn] : [],
-    local.foundation && var.github.jit_enabled ? [local.github_token_secret_arn] : [],
+    local.foundation && local.use_github_token ? [local.github_token_secret_arn] : [],
+    local.foundation && local.use_github_app ? [local.github_app_private_key_secret_arn] : [],
   )
 
   cluster_arn = var.create_cluster ? (local.foundation ? aws_ecs_cluster.controller[0].arn : null) : var.cluster_arn
@@ -128,6 +139,12 @@ locals {
     GITHUB_API_BASE_URL          = var.github.api_base_url != null ? var.github.api_base_url : ""
   } : {}
 
+  github_app_environment = local.use_github_app ? {
+    GITHUB_APP_ID                = try(var.github.app.app_id, "")
+    GITHUB_APP_INSTALLATION_ID   = try(tostring(var.github.app.installation_id), "")
+    GITHUB_APP_TOKEN_PERMISSIONS = join(",", [for name in sort(keys(try(var.github.app.token_permissions, {}))) : "${name}=${var.github.app.token_permissions[name]}"])
+  } : {}
+
   runner_environment = var.runner.enabled ? {
     CAPACITY_PROVIDER               = "aws"
     AWS_LAUNCH_TEMPLATE_ID          = var.runner.launch_template_id != null ? var.runner.launch_template_id : ""
@@ -139,12 +156,13 @@ locals {
   } : {}
 
   environment = {
-    for k, v in merge(var.extra_environment, local.base_environment, local.github_environment, local.runner_environment) : k => v if v != ""
+    for k, v in merge(var.extra_environment, local.base_environment, local.github_environment, local.github_app_environment, local.runner_environment) : k => v if v != ""
   }
 
   container_secrets = concat(
     local.foundation ? [{ name = "GITHUB_WEBHOOK_SECRET", valueFrom = local.webhook_secret_arn }] : [],
-    local.foundation && var.github.jit_enabled ? [{ name = "GITHUB_APP_INSTALLATION_TOKEN", valueFrom = local.github_token_secret_arn }] : [],
+    local.foundation && local.use_github_token ? [{ name = "GITHUB_APP_INSTALLATION_TOKEN", valueFrom = local.github_token_secret_arn }] : [],
+    local.foundation && local.use_github_app ? [{ name = "GITHUB_APP_PRIVATE_KEY", valueFrom = local.github_app_private_key_secret_arn }] : [],
   )
 
   ecs_tasks_trust = jsonencode({
@@ -200,12 +218,17 @@ resource "terraform_data" "guard" {
     }
 
     precondition {
-      condition     = !var.create_foundation || !var.github.jit_enabled || var.create_secret_containers || var.existing_github_token_secret_arn != null
-      error_message = "GitHub JIT requires a token secret: set create_secret_containers = true or provide existing_github_token_secret_arn."
+      condition     = !var.create_foundation || !local.use_github_token || var.create_secret_containers || var.existing_github_token_secret_arn != null
+      error_message = "GitHub JIT with a static installation token requires a token secret: set create_secret_containers = true or provide existing_github_token_secret_arn."
     }
 
     precondition {
-      condition     = !(var.create_secret_containers && (var.existing_webhook_secret_arn != null || var.existing_github_token_secret_arn != null))
+      condition     = !var.create_foundation || !local.use_github_app || var.create_secret_containers || var.existing_github_app_private_key_secret_arn != null
+      error_message = "GitHub App authentication requires a private-key secret: set create_secret_containers = true or provide existing_github_app_private_key_secret_arn."
+    }
+
+    precondition {
+      condition     = !(var.create_secret_containers && (var.existing_webhook_secret_arn != null || var.existing_github_token_secret_arn != null || var.existing_github_app_private_key_secret_arn != null))
       error_message = "create_secret_containers and existing_*_secret_arn inputs are mutually exclusive."
     }
 
@@ -381,6 +404,18 @@ resource "aws_secretsmanager_secret" "webhook" {
   kms_key_id              = var.secrets_kms_key_arn
   recovery_window_in_days = var.secret_recovery_window_in_days
   tags                    = merge(local.common_tags, { "component" = "controller-webhook-secret" })
+}
+
+# The App private key is created empty like every other secret. Terraform never
+# sees the key; the deployer stores it in their own account.
+resource "aws_secretsmanager_secret" "github_app_key" {
+  count = local.create_github_app_key_container ? 1 : 0
+
+  name                    = "${var.name_prefix}/github-app-private-key"
+  description             = "GitHub App private key (PEM) for the LeoRunners controller. Populate outside Terraform."
+  kms_key_id              = var.secrets_kms_key_arn
+  recovery_window_in_days = var.secret_recovery_window_in_days
+  tags                    = merge(local.common_tags, { "component" = "controller-github-app-key" })
 }
 
 resource "aws_secretsmanager_secret" "github_token" {

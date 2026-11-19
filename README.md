@@ -63,7 +63,7 @@ Works and is covered by tests (mocked cloud and GitHub):
 
 Not done yet:
 - Real AWS and GitHub end-to-end validation.
-- GitHub App authentication in the controller (it currently takes a static installation token).
+- Real-world validation of GitHub App authentication: it is implemented and tested against a fake GitHub server only.
 - A single AWS install that creates the network, launch template and controller runtime.
 - Packer image bake and cold-start measurements on real infrastructure.
 

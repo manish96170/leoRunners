@@ -96,6 +96,11 @@ variable "github" {
     allowed_labels        = optional(list(string), [])
     allow_forks           = optional(bool, false)
     api_base_url          = optional(string)
+    app = optional(object({
+      app_id            = string
+      installation_id   = number
+      token_permissions = optional(map(string), {})
+    }))
   })
   default = {}
 }

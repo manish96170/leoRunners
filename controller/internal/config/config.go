@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -61,7 +62,8 @@ type SecretRequirement struct {
 func (c Config) SecretContract() []SecretRequirement {
 	return []SecretRequirement{
 		{EnvVar: "GITHUB_WEBHOOK_SECRET", KubernetesSecret: "leo-runners-controller", KubernetesKey: "GITHUB_WEBHOOK_SECRET", Required: true},
-		{EnvVar: "GITHUB_APP_INSTALLATION_TOKEN", KubernetesSecret: "leo-runners-controller", KubernetesKey: "GITHUB_APP_INSTALLATION_TOKEN", Required: c.GitHubJIT.Enabled},
+		{EnvVar: "GITHUB_APP_INSTALLATION_TOKEN", KubernetesSecret: "leo-runners-controller", KubernetesKey: "GITHUB_APP_INSTALLATION_TOKEN", Required: c.GitHubJIT.Enabled && !c.GitHubJIT.AppConfigured()},
+		{EnvVar: "GITHUB_APP_PRIVATE_KEY", KubernetesSecret: "leo-runners-controller", KubernetesKey: "GITHUB_APP_PRIVATE_KEY", Required: c.GitHubJIT.Enabled && c.GitHubJIT.AppConfigured()},
 		{EnvVar: "AI_API_KEY", KubernetesSecret: "leo-runners-controller", KubernetesKey: "AI_API_KEY", Required: c.AI.Enabled && c.AI.Provider == "hosted"},
 	}
 }
@@ -94,6 +96,8 @@ func (c Config) secretSet(envVar string) bool {
 		return c.Webhook.Secret != ""
 	case "GITHUB_APP_INSTALLATION_TOKEN":
 		return c.GitHubJIT.InstallationToken != ""
+	case "GITHUB_APP_PRIVATE_KEY":
+		return c.GitHubJIT.AppPrivateKey != ""
 	case "AI_API_KEY":
 		return c.AI.APIKey != ""
 	default:
@@ -163,13 +167,29 @@ type CapacityConfig struct {
 }
 
 type GitHubJITConfig struct {
-	Enabled             bool
-	InstallationToken   string
+	Enabled bool
+	// InstallationToken is a pre-issued, externally rotated installation
+	// token. It is an alternative to the GitHub App settings below and the two
+	// are mutually exclusive.
+	InstallationToken string
+	// AppID, AppInstallationID, and AppPrivateKey let the controller mint
+	// short-lived installation tokens itself. The private key belongs to the
+	// deployer and must come from the deployer's own secret store.
+	AppID               string
+	AppInstallationID   int64
+	AppPrivateKey       string
+	AppTokenPermissions map[string]string
 	RunnerGroupID       int64
 	APIBaseURL          string
 	RequestTimeout      time.Duration
 	RegistrationTimeout time.Duration
 	PollInterval        time.Duration
+}
+
+// AppConfigured reports whether any GitHub App setting is present. Validation
+// requires the full set whenever any of it is.
+func (c GitHubJITConfig) AppConfigured() bool {
+	return c.AppID != "" || c.AppInstallationID != 0 || c.AppPrivateKey != ""
 }
 
 type AIConfig struct {
@@ -327,7 +347,19 @@ func LoadFrom(env map[string]string) (Config, error) {
 	}
 	c.GitHubJIT.Enabled = present && jitEnabled
 	c.GitHubJIT.InstallationToken = get("GITHUB_APP_INSTALLATION_TOKEN")
-	if !present && c.GitHubJIT.InstallationToken != "" {
+	c.GitHubJIT.AppID = get("GITHUB_APP_ID")
+	c.GitHubJIT.AppPrivateKey = strings.TrimSpace(env["GITHUB_APP_PRIVATE_KEY"])
+	if raw := get("GITHUB_APP_INSTALLATION_ID"); raw != "" {
+		if c.GitHubJIT.AppInstallationID, err = strconv.ParseInt(raw, 10, 64); err != nil || c.GitHubJIT.AppInstallationID <= 0 {
+			return c, fmt.Errorf("%w: GITHUB_APP_INSTALLATION_ID must be a positive integer", ErrInvalid)
+		}
+	}
+	if raw := get("GITHUB_APP_TOKEN_PERMISSIONS"); raw != "" {
+		if c.GitHubJIT.AppTokenPermissions, err = parseTokenPermissions(raw); err != nil {
+			return c, fmt.Errorf("%w: GITHUB_APP_TOKEN_PERMISSIONS: %v", ErrInvalid, err)
+		}
+	}
+	if !present && (c.GitHubJIT.InstallationToken != "" || c.GitHubJIT.AppConfigured()) {
 		c.GitHubJIT.Enabled = true
 	}
 	if c.GitHubJIT.RunnerGroupID, err = optionalInt64(env, "GITHUB_RUNNER_GROUP_ID", 0); err != nil {
@@ -447,14 +479,27 @@ func (c Config) Validate() error {
 		problems = append(problems, "capacity provider must match selected provider")
 	}
 
+	app := c.GitHubJIT.AppConfigured()
+	if app && c.GitHubJIT.InstallationToken != "" {
+		problems = append(problems, "GITHUB_APP_INSTALLATION_TOKEN and the GitHub App settings are mutually exclusive")
+	}
+	if app && (c.GitHubJIT.AppID == "" || c.GitHubJIT.AppInstallationID <= 0 || c.GitHubJIT.AppPrivateKey == "") {
+		problems = append(problems, "GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY must be set together")
+	}
+	if len(c.GitHubJIT.AppTokenPermissions) > 0 && !app {
+		problems = append(problems, "GITHUB_APP_TOKEN_PERMISSIONS requires the GitHub App settings")
+	}
 	if c.GitHubJIT.Enabled {
-		if c.GitHubJIT.InstallationToken == "" {
-			problems = append(problems, "GITHUB_APP_INSTALLATION_TOKEN is required when JIT is enabled")
+		if c.GitHubJIT.InstallationToken == "" && !app {
+			problems = append(problems, "GITHUB_APP_INSTALLATION_TOKEN or the GitHub App settings are required when JIT is enabled")
 		}
 		if c.GitHubJIT.RunnerGroupID <= 0 {
 			problems = append(problems, "GITHUB_RUNNER_GROUP_ID must be positive when JIT is enabled")
 		}
-	} else if c.GitHubJIT.InstallationToken != "" || c.GitHubJIT.RunnerGroupID != 0 {
+		if app && !secureAPIURL(c.GitHubJIT.APIBaseURL) {
+			problems = append(problems, "GITHUB_API_BASE_URL must use HTTPS when authenticating as a GitHub App")
+		}
+	} else if c.GitHubJIT.InstallationToken != "" || c.GitHubJIT.RunnerGroupID != 0 || app {
 		problems = append(problems, "JIT credentials and runner group must be unset when JIT is disabled")
 	}
 	if !httpsURL(c.GitHubJIT.APIBaseURL) {
@@ -505,7 +550,7 @@ func (c Config) Diagnostics() map[string]string {
 	return map[string]string{
 		"listen_addr": c.Server.ListenAddr, "state_path_set": strconv.FormatBool(c.State.Path != ""),
 		"provider": string(c.Provider.Name), "capacity_mode": string(c.Capacity.Mode), "capacity_pool_id": c.Capacity.PoolID,
-		"jit_enabled": strconv.FormatBool(c.GitHubJIT.Enabled), "jit_token_set": strconv.FormatBool(c.GitHubJIT.InstallationToken != ""),
+		"jit_enabled": strconv.FormatBool(c.GitHubJIT.Enabled), "jit_token_set": strconv.FormatBool(c.GitHubJIT.InstallationToken != ""), "github_app_configured": strconv.FormatBool(c.GitHubJIT.AppConfigured()), "github_app_private_key_set": strconv.FormatBool(c.GitHubJIT.AppPrivateKey != ""),
 		"webhook_secret_set": strconv.FormatBool(c.Webhook.Secret != ""), "ai_enabled": strconv.FormatBool(c.AI.Enabled),
 		"ai_provider": c.AI.Provider, "ai_api_key_set": strconv.FormatBool(c.AI.APIKey != ""),
 		"extensions_enabled": strconv.FormatBool(c.Extensions.Enabled), "extension_tenants": strconv.Itoa(len(c.Extensions.TenantAllowlist)),
@@ -592,6 +637,47 @@ func optionalBool(env map[string]string, key string) (bool, bool, error) {
 		return false, true, fmt.Errorf("%w: %s must be true or false", ErrInvalid, key)
 	}
 	return value, true, nil
+}
+
+var (
+	tokenPermissionNameRE = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+	tokenPermissionLevels = map[string]struct{}{"read": {}, "write": {}, "admin": {}}
+)
+
+// parseTokenPermissions parses "name=level,name=level". An invalid name or
+// level is rejected so a typo cannot silently widen or drop a permission.
+func parseTokenPermissions(value string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		name, level, ok := strings.Cut(item, "=")
+		name, level = strings.TrimSpace(name), strings.TrimSpace(level)
+		if !ok || !tokenPermissionNameRE.MatchString(name) {
+			return nil, fmt.Errorf("%q must be name=level with a lowercase permission name", item)
+		}
+		if _, valid := tokenPermissionLevels[level]; !valid {
+			return nil, fmt.Errorf("%q has level %q; want read, write, or admin", item, level)
+		}
+		if _, dup := out[name]; dup {
+			return nil, fmt.Errorf("duplicate permission %q", name)
+		}
+		out[name] = level
+	}
+	if len(out) > 64 {
+		return nil, fmt.Errorf("too many permissions (max 64)")
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
+}
+
+func secureAPIURL(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil
 }
 func httpsURL(raw string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(raw))

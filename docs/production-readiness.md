@@ -30,7 +30,7 @@ layers. At minimum, review:
 - `STATE_PATH`
 - `RECONCILE_INTERVAL`
 - `GITHUB_WEBHOOK_SECRET`
-- `GITHUB_APP_INSTALLATION_TOKEN`
+- `GITHUB_APP_INSTALLATION_TOKEN` or the GitHub App settings (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`)
 - `GITHUB_RUNNER_GROUP_ID`
 - AWS or GCP provider settings and capacity-pool settings
 

@@ -502,3 +502,154 @@ run "role_names_can_be_overridden" {
     error_message = "The inline secrets policy name must follow the execution role name."
   }
 }
+
+run "github_app_mode_uses_a_private_key_not_a_token" {
+  command = plan
+
+  variables {
+    create_foundation = true
+    github = {
+      jit_enabled           = true
+      runner_group_id       = 1
+      allowed_organizations = ["example-org"]
+      allowed_labels        = ["self-hosted"]
+      app = {
+        app_id            = "12345"
+        installation_id   = 678
+        token_permissions = { administration = "write", actions = "read" }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_secretsmanager_secret.github_app_key) == 1 && length(aws_secretsmanager_secret.github_token) == 0
+    error_message = "App mode must create the private-key container and no installation-token container."
+  }
+
+  assert {
+    condition     = contains(output.container_secret_names, "GITHUB_APP_PRIVATE_KEY") && !contains(output.container_secret_names, "GITHUB_APP_INSTALLATION_TOKEN") && contains(output.container_secret_names, "GITHUB_WEBHOOK_SECRET")
+    error_message = "The container must receive the private key and never the static token in App mode."
+  }
+
+  assert {
+    condition = (
+      output.container_environment["GITHUB_APP_ID"] == "12345" &&
+      output.container_environment["GITHUB_APP_INSTALLATION_ID"] == "678" &&
+      output.container_environment["GITHUB_APP_TOKEN_PERMISSIONS"] == "actions=read,administration=write"
+    )
+    error_message = "App identifiers must reach the container as plain environment, with permissions sorted."
+  }
+
+  assert {
+    condition     = !contains(keys(output.container_environment), "GITHUB_APP_PRIVATE_KEY")
+    error_message = "The private key must never appear in the plain environment."
+  }
+}
+
+run "static_token_mode_is_unchanged_without_app" {
+  command = plan
+
+  variables {
+    create_foundation = true
+    github = {
+      jit_enabled           = true
+      runner_group_id       = 1
+      allowed_organizations = ["example-org"]
+      allowed_labels        = ["self-hosted"]
+    }
+  }
+
+  assert {
+    condition     = length(aws_secretsmanager_secret.github_token) == 1 && length(aws_secretsmanager_secret.github_app_key) == 0
+    error_message = "Without an App the static token container is used."
+  }
+
+  assert {
+    condition     = contains(output.container_secret_names, "GITHUB_APP_INSTALLATION_TOKEN") && !contains(output.container_secret_names, "GITHUB_APP_PRIVATE_KEY") && !contains(keys(output.container_environment), "GITHUB_APP_ID")
+    error_message = "Static-token mode must not receive App settings."
+  }
+}
+
+run "github_app_requires_jit" {
+  command = plan
+
+  variables {
+    github = {
+      app = { app_id = "12345", installation_id = 678 }
+    }
+  }
+
+  expect_failures = [var.github]
+}
+
+run "github_app_rejects_bad_permission_level" {
+  command = plan
+
+  variables {
+    github = {
+      jit_enabled = true
+      app = {
+        app_id            = "12345"
+        installation_id   = 678
+        token_permissions = { administration = "owner" }
+      }
+    }
+  }
+
+  expect_failures = [var.github]
+}
+
+run "github_app_rejects_bad_ids" {
+  command = plan
+
+  variables {
+    github = {
+      jit_enabled = true
+      app         = { app_id = "bad id", installation_id = 0 }
+    }
+  }
+
+  expect_failures = [var.github]
+}
+
+run "github_app_requires_a_key_secret_when_not_creating_containers" {
+  command = plan
+
+  variables {
+    create_foundation           = true
+    create_secret_containers    = false
+    existing_webhook_secret_arn = "arn:aws:secretsmanager:us-east-1:111122223333:secret:example-webhook-AbCdEf"
+    github = {
+      jit_enabled           = true
+      runner_group_id       = 1
+      allowed_organizations = ["example-org"]
+      allowed_labels        = ["self-hosted"]
+      app                   = { app_id = "12345", installation_id = 678 }
+    }
+  }
+
+  expect_failures = [terraform_data.guard]
+}
+
+run "github_app_accepts_an_existing_key_secret" {
+  command = plan
+
+  variables {
+    create_foundation                          = true
+    create_secret_containers                   = false
+    existing_webhook_secret_arn                = "arn:aws:secretsmanager:us-east-1:111122223333:secret:example-webhook-AbCdEf"
+    existing_github_app_private_key_secret_arn = "arn:aws:secretsmanager:us-east-1:111122223333:secret:example-app-key-AbCdEf"
+    github = {
+      jit_enabled           = true
+      runner_group_id       = 1
+      allowed_organizations = ["example-org"]
+      allowed_labels        = ["self-hosted"]
+      app                   = { app_id = "12345", installation_id = 678 }
+    }
+  }
+
+  assert {
+    condition     = output.github_app_private_key_secret_arn == "arn:aws:secretsmanager:us-east-1:111122223333:secret:example-app-key-AbCdEf"
+    error_message = "The adopted key secret ARN must be published."
+  }
+}

@@ -58,7 +58,20 @@ non-secret starting point.
 `github` controls the runtime contract:
 
 - `jit_enabled = false` (default): the controller verifies webhooks but provisions nothing real (fake provider).
-- `jit_enabled = true`: requires `runner_group_id`, an organization or repository allowlist, and a label allowlist, plus an installation-token secret. These mirror the controller's own startup validation, so a misconfiguration fails at plan time and not as a crash loop.
+- `jit_enabled = true`: requires `runner_group_id`, an organization or repository allowlist, a label allowlist, and one way to authenticate to GitHub. These mirror the controller's own startup validation, so a misconfiguration fails at plan time and not as a crash loop.
+
+GitHub authentication is one of two mutually exclusive modes:
+
+| Mode | Set | Secret container created | Notes |
+|---|---|---|---|
+| **GitHub App (recommended)** | `github.app = { app_id, installation_id, token_permissions }` | `<name_prefix>/github-app-private-key` | the controller signs a short-lived JWT with the key and mints its own installation tokens, refreshing before they expire; no redeploy for token expiry |
+| Static installation token | leave `github.app` null | `<name_prefix>/github-installation-token` | the token expires after about an hour and must be rotated externally; suited to short validation runs only |
+
+In App mode the private key is only ever a Secrets Manager reference. Create the
+GitHub App yourself, store its PEM key in the created container outside
+Terraform, and see `docs/github-runtime-contract.md` for the permissions.
+`app.token_permissions` optionally narrows each minted token below what the App
+was granted, for example `{ administration = "write" }`.
 
 `runner` stays disabled. Enabling it requires `github.jit_enabled`, the
 launch template, the dedicated runner role and instance profile ARNs, and a
@@ -84,11 +97,12 @@ that are never acceptable here; a human still reviews the generated policy
 | `phase` | `disabled`, `foundation`, or `service` |
 | `ecr_repository_url`, `ecr_repository_arn` | where to publish the image |
 | `state_table_name`, `state_table_arn`, `state_index_arns` | state table and indexes (feed the policy review) |
-| `webhook_secret_arn`, `github_token_secret_arn` | secret containers to populate outside Terraform |
+| `webhook_secret_arn`, `github_token_secret_arn`, `github_app_private_key_secret_arn` | secret containers to populate outside Terraform |
 | `execution_role_arn`, `task_role_arn`, `task_role_name` | the two separate roles |
 | `task_security_group_id`, `target_group_arn`, `cluster_arn` | network and routing |
 | `listener_rule_arn`, `service_name`, `task_definition_arn`, `image_uri` | phase 2 results (null before) |
 | `container_environment` | the non-secret environment the container receives, for review |
+| `container_secret_names` | names (never values) of the variables injected from Secrets Manager |
 | `policy_review_scope` | account, region, table and index ARNs, runner role: inputs for Autopilot review |
 | `log_group_name`, `log_group_arn` | controller logs |
 
@@ -116,4 +130,4 @@ Offline tests: `terraform init -backend=false && terraform test` in this directo
 
 - One controller replica. Rolling updates stop the old task before starting the new one.
 - Traffic from the ALB to the task is HTTP inside the VPC. This is not end-to-end TLS.
-- `GITHUB_APP_INSTALLATION_TOKEN` is read once at process start and installation tokens expire after about an hour; see `docs/github-runtime-contract.md` before relying on JIT in production.
+- A static `GITHUB_APP_INSTALLATION_TOKEN` is read once at process start and expires after about an hour. Use `github.app` for anything longer than a short validation run; see `docs/github-runtime-contract.md`.

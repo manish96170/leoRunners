@@ -5,60 +5,143 @@
 | Variable | Required | Source in `aws-ecs-controller` |
 |---|---|---|
 | `GITHUB_WEBHOOK_SECRET` | always | Secrets Manager reference |
-| `GITHUB_APP_INSTALLATION_TOKEN` | only for JIT | Secrets Manager reference, injected when `github.jit_enabled` |
+| `GITHUB_APP_ID` | GitHub App mode | `github.app.app_id` (plain config) |
+| `GITHUB_APP_INSTALLATION_ID` | GitHub App mode | `github.app.installation_id` (plain config) |
+| `GITHUB_APP_PRIVATE_KEY` | GitHub App mode | Secrets Manager reference holding the PEM key |
+| `GITHUB_APP_TOKEN_PERMISSIONS` | optional, App mode | `github.app.token_permissions`, for example `administration=write` |
+| `GITHUB_APP_INSTALLATION_TOKEN` | static-token mode | Secrets Manager reference |
 | `GITHUB_RUNNER_GROUP_ID` | with JIT | `github.runner_group_id` |
 | `GITHUB_ALLOWED_ORGANIZATIONS` / `GITHUB_ALLOWED_REPOSITORIES` | with JIT, at least one | `github.allowed_organizations` / `allowed_repositories` |
 | `GITHUB_ALLOWED_LABELS` | with JIT | `github.allowed_labels` |
 | `GITHUB_ALLOW_FORKS`, `GITHUB_API_BASE_URL` | optional | `github.allow_forks`, `github.api_base_url` |
 
-The module enforces the same rules the controller enforces at startup, so a
-bad combination fails at plan time instead of as a crash loop. No GitHub App
-ID, organization, repository, or runner label is a default anywhere in
-LeoRunners.
+The controller and the Terraform module enforce the same rules, so a bad
+combination fails at plan time or at startup instead of as a crash loop. No
+GitHub App ID, installation, organization, repository, or runner label is a
+default anywhere in LeoRunners.
 
-## Finding: a durable JIT deployment needs token refresh
+## Authentication modes
 
-Confirmed from the source:
+JIT needs the controller to call GitHub's API. There are two mutually exclusive
+ways to authenticate, and the controller refuses to start with both.
 
-- `controller/cmd/runner-controller/main.go` builds the GitHub client with `github.StaticBearerToken(token)`, a token read once from `GITHUB_APP_INSTALLATION_TOKEN` at process start.
-- ECS injects secrets only when a task starts; it never refreshes a running task.
-- GitHub App installation access tokens expire after about one hour.
+### GitHub App (recommended)
 
-So with a static token, JIT stops working roughly an hour after the task
-starts. The controller already has the right seam:
-`github.BearerTokenSource` in `controller/internal/github/jit.go` supplies a
-token per request, and `StaticBearerToken` is only one implementation.
+The deployer creates and owns a GitHub App. The controller holds the App's ID,
+an installation ID, and the App's private key, and mints its own short-lived
+installation tokens:
 
-## Options
+1. It signs a JWT (RS256) with the private key: `iat` 60 seconds in the past to
+   allow for clock drift, `exp` 9 minutes ahead (GitHub allows at most 10), and
+   `iss` set to the App ID.
+2. It calls `POST /app/installations/{installation_id}/access_tokens` with the
+   JWT. GitHub returns an installation token that expires after about an hour.
+3. It caches the token and requests a new one 5 minutes before expiry. If a
+   refresh fails while the cached token is still valid, the cached token keeps
+   being used, so a short GitHub outage does not stop runners.
+4. Concurrent callers share one refresh.
 
-1. **Generic GitHub App support in LeoRunners (recommended).** Add a token
-   source that holds the App ID, installation ID, and private key, signs a
-   short-lived JWT, requests an installation token, and caches it until shortly
-   before expiry. The private key would be a Secrets Manager reference like any
-   other secret. This is a controller code change and is not implemented yet;
-   the variable and environment names are not final. The module will gain the
-   matching secret container and environment mapping when it lands.
-2. **External rotation (stop-gap only).** A customer-owned job mints an
-   installation token and writes it to the token secret, then forces a new
-   deployment before the hour is up. Because deployments stop the old task
-   before starting the new one, every rotation is a short outage, so this suits
-   short validation runs, not production.
-3. **JIT off.** `github.jit_enabled = false` (default) runs the webhook
-   receiver with a fake provider and provisions nothing real. Useful to verify
-   the front door, signature checks, and state.
+No redeploy is needed for token expiry. The private key is read once at start
+from the deployer's own Secrets Manager secret. It is never logged, never
+written to disk (the container root filesystem is read-only), and never
+included in an error message. A key that is missing, malformed, passphrase
+protected, not RSA, or smaller than 2048 bits stops the controller at startup.
+A wrong App ID or installation ID is reported in the startup log by a background
+check without blocking startup, and is retried for each job.
 
-## Permissions
+`GITHUB_APP_TOKEN_PERMISSIONS` (`name=level`, comma separated) optionally asks
+GitHub for tokens narrower than the App's full grant. The token can never exceed
+what the App was granted.
 
-The repository-level JIT endpoint requires repository administration
-permission (see `docs/github-integration.md`). Grant the GitHub App the
-smallest permissions that satisfy the endpoint you use, install it only on the
-organizations or repositories you list in the allowlists, and review the
-App's permissions against GitHub's current documentation when you create it.
-Creating the GitHub App is a customer action; nothing in this repository
-creates one.
+In App mode `GITHUB_API_BASE_URL` must be HTTPS, because the signed JWT is sent
+to it.
 
-## Known runtime limits to review before production
+### Static installation token
 
-- One controller replica. The coordination package exists but is not wired into the executable, so `desired_count` is limited to 0 or 1.
-- The webhook handler runs the job's orchestration inside the HTTP request with a long context. GitHub expects a response within about 10 seconds and the ALB idle timeout defaults to 60 seconds. Verify queued-event handling latency against real provisioning before relying on it, and consider acknowledging quickly and working asynchronously.
+`GITHUB_APP_INSTALLATION_TOKEN` is read once at start and never refreshed. The
+token expires after about an hour, and ECS or Kubernetes injects secrets only
+when a task or pod starts, so rotating it means redeploying. Use it for short
+validation runs only, or if an external system you already operate mints the
+token and restarts the controller on rotation.
+
+## Creating the GitHub App (a customer action)
+
+Nothing in LeoRunners creates the App. In the account that owns the
+repositories:
+
+1. **Permissions.** Repository permissions: **Administration: read and write**
+   (the repository-level JIT endpoints need it) and **Actions: read** (GitHub
+   requires at least this to subscribe to `workflow_job` events). Metadata read
+   is granted automatically. Grant nothing else.
+2. **Webhook.** Subscribe to **Workflow job**. Set the URL to your gateway's
+   webhook path and the secret to the value you store in the webhook secret
+   container.
+3. **Install** the App only on the repositories (or organization) you list in the
+   controller's allowlists.
+4. **Generate a private key** and store the PEM in the `github_app_private_key_secret_arn`
+   secret. Do not put it in Terraform, tfvars, a repository, or a ticket.
+5. **Installation ID.** GitHub includes it in the `installation` object of the
+   webhook deliveries the App receives, and `GET /app/installations`
+   (authenticated with an App JWT) lists it.
+6. **Runner group.** Create or choose the runner group the runners register to
+   and set its numeric ID as `github.runner_group_id`.
+
+Storing the key, for example:
+
+```sh
+umask 077
+# key.pem is the file GitHub gave you
+aws secretsmanager put-secret-value \
+  --secret-id "$(terraform output -raw github_app_private_key_secret_arn)" \
+  --secret-string file://key.pem
+rm -f key.pem
+```
+
+## Rotating the private key
+
+GitHub lets an App hold more than one key. Add a new key in GitHub, store it in
+the secret, force a new deployment (`aws ecs update-service --force-new-deployment`),
+confirm the startup log reports `GitHub App authentication ok`, then delete the
+old key in GitHub.
+
+## Permissions finding: an org-level endpoint exists
+
+The controller currently calls the repository-level endpoint
+`POST /repos/{owner}/{repo}/actions/runners/generate-jitconfig`. In GitHub's
+current documentation that endpoint requires the repository **Administration**
+write permission, which is a broad grant for an App.
+
+GitHub also documents an organization-level endpoint,
+`POST /orgs/{org}/actions/runners/generate-jitconfig`, with the same request and
+response, and lists it under the organization **Self-hosted runners** write
+permission, a much narrower grant. Moving the controller to the org-level
+endpoint would let customers grant that permission instead of repository
+Administration. This is not implemented yet (it changes how runner groups and
+repository scope interact) and is tracked in `TODO.md`. Which endpoint is usable
+can also depend on the GitHub plan and runner-group configuration; confirm in a
+test organization before relying on it.
+
+## Status and known limits
+
+- GitHub App authentication is tested against a fake GitHub server with a
+  key generated at test time. It has **not** yet been exercised against
+  github.com. Do that in a disposable test repository before trusting it.
+- One controller serves one App installation (one organization or account). Serving several
+  installations from one controller needs a change to how tokens are requested.
+- One controller replica: the coordination package exists but is not wired into
+  the executable, so `desired_count` is limited to 0 or 1.
+- The webhook handler runs the job's orchestration inside the HTTP request with
+  a long context. GitHub expects an answer in about 10 seconds and the ALB idle
+  timeout defaults to 60 seconds. Verify queued-event handling latency against
+  real provisioning, and consider acknowledging quickly and working
+  asynchronously.
+- `GITHUB_API_BASE_URL` is passed to the client, which allows GitHub Enterprise
+  Server, but that has not been tested against a real GHES instance.
+  `GITHUB_JIT_REQUEST_TIMEOUT` is applied to the App token request only;
+  the JIT client itself and the `GITHUB_REGISTRATION_TIMEOUT` and
+  `GITHUB_REGISTRATION_POLL_INTERVAL` settings are validated but not yet
+  applied by the executable, which uses the client defaults.
 - ALB to task traffic is HTTP inside the VPC, not end-to-end TLS.
+
+Repository-level JIT also requires repository administration permission. See
+`docs/github-integration.md`.

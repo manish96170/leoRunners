@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -89,7 +88,7 @@ func main() {
 	poolID := envOrDefault("CAPACITY_POOL_ID", "configured")
 	service.Scheduler = &scheduler.Scheduler{State: repository, Mode: mode, PoolRegistry: poolRegistry, PoolProviders: map[string]providers.Provider{poolID: provider}}
 	service.Lifecycle = &lifecycle.Manager{State: repository, Provider: provider, Sink: serviceSink}
-	configureGitHubAssignment(service, repository, provider)
+	configureGitHubAssignment(service, repository, provider, runtime.GitHubJIT)
 	startReconciliation(repository, provider)
 
 	secret := runtime.Webhook.Secret
@@ -280,19 +279,20 @@ func startReconciliation(repository state.Repository, provider providers.Provide
 	}()
 }
 
-func configureGitHubAssignment(service *controller.Service, repository state.Repository, provider providers.Provider) {
-	token := strings.TrimSpace(os.Getenv("GITHUB_APP_INSTALLATION_TOKEN"))
-	if token == "" {
+func configureGitHubAssignment(service *controller.Service, repository state.Repository, provider providers.Provider, jit runtimeconfig.GitHubJITConfig) {
+	if !jit.Enabled {
 		return
 	}
-	groupID, err := strconv.ParseInt(strings.TrimSpace(os.Getenv("GITHUB_RUNNER_GROUP_ID")), 10, 64)
-	if err != nil || groupID <= 0 {
-		log.Fatal("GITHUB_RUNNER_GROUP_ID must be a positive integer when JIT is enabled")
-	}
-	client, err := github.NewJITClient(github.JITClientConfig{TokenSource: github.StaticBearerToken(token)})
+	groupID := jit.RunnerGroupID
+	tokenSource, err := newGitHubTokenSource(jit)
 	if err != nil {
 		log.Fatal(err)
 	}
+	client, err := github.NewJITClient(github.JITClientConfig{BaseURL: jit.APIBaseURL, TokenSource: tokenSource})
+	if err != nil {
+		log.Fatal(err)
+	}
+	warmGitHubTokenSource(tokenSource, jit)
 	verifier, err := github.NewRegistrationVerifier(client, github.RegistrationVerifierConfig{})
 	if err != nil {
 		log.Fatal(err)

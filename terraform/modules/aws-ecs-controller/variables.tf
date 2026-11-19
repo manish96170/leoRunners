@@ -242,6 +242,12 @@ variable "existing_github_token_secret_arn" {
   default     = null
 }
 
+variable "existing_github_app_private_key_secret_arn" {
+  description = "ARN of an existing Secrets Manager secret holding the GitHub App private key in PEM form (when create_secret_containers = false and github.app is set)."
+  type        = string
+  default     = null
+}
+
 variable "secrets_ready" {
   description = "Operator assertion that every referenced secret has an approved, non-empty value. Terraform cannot verify this without reading the secret, so the service refuses to start until it is true."
   type        = bool
@@ -486,9 +492,16 @@ variable "github" {
   description = <<-EOT
     GitHub runtime settings. With jit_enabled = false the controller accepts
     and verifies webhooks but provisions nothing real. With jit_enabled = true
-    the installation-token secret, runner group, and an organization or
-    repository allowlist plus a label allowlist are all required, matching the
+    the runner group, an organization or repository allowlist, a label
+    allowlist, and one way to authenticate are all required, matching the
     controller's startup validation.
+
+    Authentication is either a GitHub App (set `app`; the controller mints its
+    own short-lived installation tokens from a private key held in Secrets
+    Manager) or an externally rotated installation token (leave `app` null).
+    The two are mutually exclusive. `app.token_permissions` optionally narrows
+    each minted token below what the App was granted, for example
+    { administration = "write" }.
   EOT
   type = object({
     jit_enabled           = optional(bool, false)
@@ -498,8 +511,36 @@ variable "github" {
     allowed_labels        = optional(list(string), [])
     allow_forks           = optional(bool, false)
     api_base_url          = optional(string)
+    app = optional(object({
+      app_id            = string
+      installation_id   = number
+      token_permissions = optional(map(string), {})
+    }))
   })
   default = {}
+
+  validation {
+    condition     = var.github.app == null || can(regex("^[A-Za-z0-9._-]{1,64}$", var.github.app.app_id))
+    error_message = "github.app.app_id must be the GitHub App's numeric ID or client ID."
+  }
+
+  validation {
+    condition     = var.github.app == null || var.github.app.installation_id > 0
+    error_message = "github.app.installation_id must be a positive installation ID."
+  }
+
+  validation {
+    condition = var.github.app == null || alltrue([
+      for name, level in var.github.app.token_permissions :
+      can(regex("^[a-z][a-z0-9_]{0,63}$", name)) && contains(["read", "write", "admin"], level)
+    ])
+    error_message = "github.app.token_permissions must map lowercase permission names to read, write, or admin."
+  }
+
+  validation {
+    condition     = var.github.app == null || var.github.jit_enabled
+    error_message = "github.app requires github.jit_enabled = true."
+  }
 }
 
 ###############################################################################

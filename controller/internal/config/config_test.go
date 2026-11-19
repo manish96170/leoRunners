@@ -206,7 +206,11 @@ func TestSecretContractAndSafeSnapshotNeverContainValues(t *testing.T) {
 		t.Fatalf("LoadFrom() error = %v", err)
 	}
 	requirements := c.SecretContract()
-	if len(requirements) != 3 || !requirements[0].Required || !requirements[1].Required || requirements[2].Required {
+	required := map[string]bool{}
+	for _, requirement := range requirements {
+		required[requirement.EnvVar] = requirement.Required
+	}
+	if len(requirements) != 4 || !required["GITHUB_WEBHOOK_SECRET"] || !required["GITHUB_APP_INSTALLATION_TOKEN"] || required["GITHUB_APP_PRIVATE_KEY"] || required["AI_API_KEY"] {
 		t.Fatalf("secret contract = %+v", requirements)
 	}
 	snapshot := c.SafeSnapshot()
@@ -249,5 +253,116 @@ func TestConfigValidateDoesNotMutateSlicesOrSecrets(t *testing.T) {
 	}
 	if len(c.Provider.AWS.SecurityGroupIDs) != 1 || c.Provider.AWS.SecurityGroupIDs[0] != before[0] {
 		t.Fatalf("Validate mutated security groups: %#v", c.Provider.AWS.SecurityGroupIDs)
+	}
+}
+
+func appEnv() map[string]string {
+	env := validEnv()
+	env["GITHUB_JIT_ENABLED"] = "true"
+	env["GITHUB_RUNNER_GROUP_ID"] = "42"
+	env["GITHUB_APP_ID"] = "12345"
+	env["GITHUB_APP_INSTALLATION_ID"] = "678"
+	env["GITHUB_APP_PRIVATE_KEY"] = "pem-fixture-not-a-real-key"
+	return env
+}
+
+func TestLoadFromAcceptsGitHubAppSettings(t *testing.T) {
+	env := appEnv()
+	env["GITHUB_APP_TOKEN_PERMISSIONS"] = "administration=write, actions=read"
+	c, err := LoadFrom(env)
+	if err != nil {
+		t.Fatalf("LoadFrom() error = %v", err)
+	}
+	jit := c.GitHubJIT
+	if !jit.Enabled || !jit.AppConfigured() || jit.AppID != "12345" || jit.AppInstallationID != 678 || jit.AppPrivateKey == "" || jit.InstallationToken != "" {
+		t.Fatalf("GitHub App config = %+v", jit)
+	}
+	if jit.AppTokenPermissions["administration"] != "write" || jit.AppTokenPermissions["actions"] != "read" {
+		t.Fatalf("permissions = %v", jit.AppTokenPermissions)
+	}
+}
+
+func TestLoadFromEnablesJITImplicitlyFromAppSettings(t *testing.T) {
+	env := appEnv()
+	delete(env, "GITHUB_JIT_ENABLED")
+	c, err := LoadFrom(env)
+	if err != nil || !c.GitHubJIT.Enabled {
+		t.Fatalf("implicit enable = %+v, %v", c.GitHubJIT, err)
+	}
+}
+
+func TestLoadFromRejectsUnsafeGitHubAppCombinations(t *testing.T) {
+	mutate := func(f func(map[string]string)) map[string]string {
+		env := appEnv()
+		f(env)
+		return env
+	}
+	tests := map[string]map[string]string{
+		"token and app together":   mutate(func(e map[string]string) { e["GITHUB_APP_INSTALLATION_TOKEN"] = "static-token" }),
+		"missing app id":           mutate(func(e map[string]string) { delete(e, "GITHUB_APP_ID") }),
+		"missing installation id":  mutate(func(e map[string]string) { delete(e, "GITHUB_APP_INSTALLATION_ID") }),
+		"missing private key":      mutate(func(e map[string]string) { delete(e, "GITHUB_APP_PRIVATE_KEY") }),
+		"non numeric installation": mutate(func(e map[string]string) { e["GITHUB_APP_INSTALLATION_ID"] = "abc" }),
+		"zero installation":        mutate(func(e map[string]string) { e["GITHUB_APP_INSTALLATION_ID"] = "0" }),
+		"no runner group":          mutate(func(e map[string]string) { delete(e, "GITHUB_RUNNER_GROUP_ID") }),
+		"plain http api":           mutate(func(e map[string]string) { e["GITHUB_API_BASE_URL"] = "http://github.example.com" }),
+		"jit disabled with app":    mutate(func(e map[string]string) { e["GITHUB_JIT_ENABLED"] = "false"; delete(e, "GITHUB_RUNNER_GROUP_ID") }),
+		"bad permission level":     mutate(func(e map[string]string) { e["GITHUB_APP_TOKEN_PERMISSIONS"] = "administration=owner" }),
+		"bad permission name":      mutate(func(e map[string]string) { e["GITHUB_APP_TOKEN_PERMISSIONS"] = "Admin=read" }),
+		"duplicate permission":     mutate(func(e map[string]string) { e["GITHUB_APP_TOKEN_PERMISSIONS"] = "actions=read,actions=write" }),
+		"permissions without app":  {"GITHUB_WEBHOOK_SECRET": "x", "GITHUB_APP_TOKEN_PERMISSIONS": "actions=read"},
+	}
+	for name, env := range tests {
+		if _, err := LoadFrom(env); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: error = %v, want ErrInvalid", name, err)
+		}
+	}
+}
+
+func TestGitHubAppSecretContractAndDiagnosticsNeverContainValues(t *testing.T) {
+	c, err := LoadFrom(appEnv())
+	if err != nil {
+		t.Fatal(err)
+	}
+	required := map[string]bool{}
+	for _, requirement := range c.SecretContract() {
+		required[requirement.EnvVar] = requirement.Required
+	}
+	if !required["GITHUB_APP_PRIVATE_KEY"] || required["GITHUB_APP_INSTALLATION_TOKEN"] {
+		t.Fatalf("app mode must require the private key and not the static token: %v", required)
+	}
+	rendered := fmt.Sprintf("%v %+v %s", c.Diagnostics(), c.SafeSnapshot(), c)
+	for _, forbidden := range []string{"pem-fixture", "not-a-real-key"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("diagnostics leak %q: %s", forbidden, rendered)
+		}
+	}
+	if !c.SafeSnapshot().SecretPresence["GITHUB_APP_PRIVATE_KEY"] {
+		t.Fatalf("presence flag missing: %#v", c.SafeSnapshot().SecretPresence)
+	}
+}
+
+func TestLoadFromStaticTokenModeIsUnchanged(t *testing.T) {
+	env := validEnv()
+	env["GITHUB_APP_INSTALLATION_TOKEN"] = "static-token"
+	env["GITHUB_RUNNER_GROUP_ID"] = "9"
+	c, err := LoadFrom(env)
+	if err != nil || !c.GitHubJIT.Enabled || c.GitHubJIT.AppConfigured() {
+		t.Fatalf("static token mode = %+v, %v", c.GitHubJIT, err)
+	}
+}
+
+// The shipped Kubernetes ConfigMap lists the GitHub App keys with empty
+// values so operators can find them. Empty must mean "not configured".
+func TestLoadFromTreatsEmptyGitHubAppSettingsAsUnset(t *testing.T) {
+	env := validEnv()
+	env["GITHUB_APP_ID"] = ""
+	env["GITHUB_APP_INSTALLATION_ID"] = ""
+	env["GITHUB_APP_PRIVATE_KEY"] = ""
+	env["GITHUB_APP_TOKEN_PERMISSIONS"] = ""
+	env["GITHUB_JIT_ENABLED"] = "false"
+	c, err := LoadFrom(env)
+	if err != nil || c.GitHubJIT.AppConfigured() || c.GitHubJIT.Enabled {
+		t.Fatalf("empty App settings = %+v, %v", c.GitHubJIT, err)
 	}
 }

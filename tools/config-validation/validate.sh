@@ -16,24 +16,24 @@ for file in "$CONFIGMAP" "$SECRET" "$DEPLOYMENT" "$CONFIG" "$CONTRACT"; do
 done
 
 grep -q '"version": "v1"' "$CONTRACT" || fail "contract version is not v1"
-for key in GITHUB_WEBHOOK_SECRET GITHUB_APP_INSTALLATION_TOKEN AI_API_KEY; do
+for key in GITHUB_WEBHOOK_SECRET GITHUB_APP_INSTALLATION_TOKEN GITHUB_APP_PRIVATE_KEY AI_API_KEY; do
   grep -q "$key" "$CONTRACT" || fail "$key missing from contract"
 done
 pass "versioned secret contract exists"
 
-for key in GITHUB_WEBHOOK_SECRET GITHUB_APP_INSTALLATION_TOKEN AI_API_KEY; do
+for key in GITHUB_WEBHOOK_SECRET GITHUB_APP_INSTALLATION_TOKEN GITHUB_APP_PRIVATE_KEY AI_API_KEY; do
   grep -Eq "^[[:space:]]+$key:[[:space:]]*\"\"[[:space:]]*$" "$SECRET" || fail "$key must be an empty out-of-band Secret placeholder"
 done
 secret_values="$(awk '/^[[:space:]]*[A-Z][A-Z0-9_]+:[[:space:]]*/ { line=$0; sub(/^[^:]+:[[:space:]]*/, "", line); if (line !~ /^\"\"[[:space:]]*$/ && line !~ /^#/) print }' "$SECRET")"
 test -z "$secret_values" || fail "Secret manifest contains a non-empty value"
 pass "Secret manifest contains no committed values"
 
-for key in GITHUB_WEBHOOK_SECRET GITHUB_APP_INSTALLATION_TOKEN AI_API_KEY; do
+for key in GITHUB_WEBHOOK_SECRET GITHUB_APP_INSTALLATION_TOKEN GITHUB_APP_PRIVATE_KEY AI_API_KEY; do
   grep -q "^[[:space:]]*$key:" "$SECRET" || fail "$key missing from Secret manifest"
 done
 pass "all contract keys exist in Kubernetes Secret"
 
-for key in GITHUB_WEBHOOK_SECRET GITHUB_APP_INSTALLATION_TOKEN; do
+for key in GITHUB_WEBHOOK_SECRET GITHUB_APP_INSTALLATION_TOKEN GITHUB_APP_PRIVATE_KEY; do
   grep -q "key: $key" "$DEPLOYMENT" || fail "$key missing from Deployment secretKeyRef"
 done
 grep -q 'optional: false' "$DEPLOYMENT" || fail "required webhook reference is not mandatory"

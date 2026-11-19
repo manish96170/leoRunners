@@ -52,6 +52,12 @@ spec:
                   name: leo-runners-controller
                   key: GITHUB_APP_INSTALLATION_TOKEN
                   optional: true
+            - name: GITHUB_APP_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: leo-runners-controller
+                  key: GITHUB_APP_PRIVATE_KEY
+                  optional: true
           resources:
             requests:
               cpu: 100m
