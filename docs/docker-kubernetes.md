@@ -134,7 +134,7 @@ by a secret-management tool; do not put literal values in checked-in YAML.
 Required sensitive values include:
 
 - `GITHUB_WEBHOOK_SECRET`;
-- `GITHUB_APP_INSTALLATION_TOKEN` when JIT mode is enabled;
+- `GITHUB_APP_PRIVATE_KEY` (GitHub App mode) or `GITHUB_APP_INSTALLATION_TOKEN` (static-token mode) when JIT mode is enabled;
 - optional AI API credentials, only when AI is explicitly enabled and consented.
 
 For AWS, prefer pod identity/IRSA or an equivalent workload-identity binding.

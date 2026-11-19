@@ -32,6 +32,11 @@ data:
   GCP_NAME_PREFIX: leo-runner
   GITHUB_JIT_ENABLED: "false"
   GITHUB_RUNNER_GROUP_ID: "0"
+  # GitHub App authentication (an alternative to a static installation token;
+  # the two are mutually exclusive). Leave empty unless JIT is enabled.
+  GITHUB_APP_ID: ""
+  GITHUB_APP_INSTALLATION_ID: ""
+  GITHUB_APP_TOKEN_PERMISSIONS: ""
   GITHUB_API_BASE_URL: https://api.github.com
   GITHUB_JIT_REQUEST_TIMEOUT: 30s
   GITHUB_REGISTRATION_TIMEOUT: 10m

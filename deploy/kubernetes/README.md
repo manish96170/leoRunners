@@ -58,9 +58,16 @@ checked-in manifest:
 
 ```text
 GITHUB_WEBHOOK_SECRET
-GITHUB_APP_INSTALLATION_TOKEN
+GITHUB_APP_INSTALLATION_TOKEN (only for the static-token mode of JIT)
+GITHUB_APP_PRIVATE_KEY (only for GitHub App mode of JIT; the PEM key)
 AI_API_KEY (only when AI is explicitly enabled)
 ```
+
+GitHub authentication for JIT is either a GitHub App (set `GITHUB_APP_ID` and
+`GITHUB_APP_INSTALLATION_ID` in the ConfigMap and store the private key as
+`GITHUB_APP_PRIVATE_KEY`) or an externally rotated installation token. The two
+are mutually exclusive; the controller refuses to start with both. The App mode
+mints and refreshes its own short-lived tokens. See `docs/github-runtime-contract.md`.
 
 Create or synchronize those Secrets through the cluster's approved secret
 manager. Do not place credentials in ConfigMaps, image layers, annotations,

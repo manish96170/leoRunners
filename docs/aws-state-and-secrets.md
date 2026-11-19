@@ -31,7 +31,8 @@ is transient bootstrap input and is not persisted. Use an existing table with
 | Secret | Name | When created |
 |---|---|---|
 | GitHub webhook secret | `<name_prefix>/github-webhook-secret` | always with the foundation |
-| GitHub installation token | `<name_prefix>/github-installation-token` | when `github.jit_enabled` or `create_github_token_secret` |
+| GitHub App private key (PEM) | `<name_prefix>/github-app-private-key` | when `github.app` is set (GitHub App mode) |
+| GitHub installation token | `<name_prefix>/github-installation-token` | static-token mode: when `github.jit_enabled` without `github.app`, or `create_github_token_secret` |
 
 Populate them outside Terraform. Avoid putting values in shell history or
 process arguments; use a file with restrictive permissions:
@@ -59,8 +60,15 @@ aws ecs update-service --cluster <cluster> --service <service> --force-new-deplo
 ```
 
 Rotate the webhook secret on both sides (GitHub and Secrets Manager) in the
-same window. The installation token has a one-hour lifetime and needs a
-different solution; see [GitHub runtime contract](github-runtime-contract.md).
+same window.
+
+In GitHub App mode the controller mints and refreshes its own installation
+tokens from the private key, so token expiry needs no action. Rotating the
+private key itself follows the steps in
+[GitHub runtime contract](github-runtime-contract.md#rotating-the-private-key).
+In static-token mode the installation token expires after about an hour and
+must be re-issued and the service redeployed, so that mode suits short
+validation runs only.
 
 ## Encryption keys
 

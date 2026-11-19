@@ -51,6 +51,11 @@ output "github_token_secret_arn" {
   value       = try(aws_secretsmanager_secret.github_token[0].arn, local.github_token_secret_arn)
 }
 
+output "github_app_private_key_secret_arn" {
+  description = "Secrets Manager ARN for the GitHub App private key container, or null when GitHub App authentication is not used. Store the PEM key here outside Terraform."
+  value       = try(aws_secretsmanager_secret.github_app_key[0].arn, local.github_app_private_key_secret_arn)
+}
+
 output "execution_role_arn" {
   description = "ECS task execution role ARN."
   value       = try(aws_iam_role.execution[0].arn, null)
@@ -117,4 +122,9 @@ output "policy_review_scope" {
 output "container_environment" {
   description = "Non-secret environment variables the controller container receives. Secrets are injected by ARN reference and are not listed."
   value       = local.environment
+}
+
+output "container_secret_names" {
+  description = "Names of the environment variables the container receives from Secrets Manager references. Names only; no ARNs or values."
+  value       = [for secret in local.container_secrets : secret.name]
 }
