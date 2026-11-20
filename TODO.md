@@ -39,7 +39,10 @@ first as the target experience, then the gaps they expose are built.
 - [x] 2.2f Acknowledge webhooks quickly and orchestrate asynchronously (`controller/internal/dispatch`; measured 16s on a cold launch against an emulator before the change). A durable queue is a possible follow-up.
 - [ ] 2.3 GitHub App manifest for one-click App creation.
 - [ ] 2.4 Job-level sizing labels in `runs-on:` (confirm whether label parsing exists).
-- [ ] 2.5 End-to-end smoke test against a disposable AWS account and test repo.
+- [x] 2.5a Local rehearsal harness (`tools/local-rehearsal`): floci + controller + Cloudflare quick tunnel; stage 1 (webhook intake, launch, terminate, restart safety) verified.
+- [x] 2.5b Generic runner user-data template (`bootstrap/runner/user-data.sh`) with a pinned, checksum-verified runner download.
+- [ ] 2.5c Run a real workflow job through the rehearsal against a test repository (needs the GitHub App created in a browser).
+- [ ] 2.5d End-to-end smoke test against a disposable AWS account and test repo.
 
 ### 3. Validate and correct
 

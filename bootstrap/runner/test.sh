@@ -91,4 +91,18 @@ set -e
 [ "$failure_status" -eq 23 ] || fail "runner failure status was not preserved"
 grep -q 'runner exited with status 23' "$failure_log" || fail "runner failure was not clearly reported"
 
+# user-data.sh template: static checks. The controller's Go tests render it
+# through the real renderer; these keep the file honest when edited by hand.
+user_data=$test_dir/user-data.sh
+bash -n "$user_data" || fail "user-data.sh is not valid bash"
+sh -n "$test_dir/pin-latest-runner.sh" || fail "pin-latest-runner.sh is not valid shell"
+placeholders=$(grep -o '{{GITHUB_JIT_CONFIG_B64}}' "$user_data" | wc -l | tr -d ' ')
+[ "$placeholders" = 1 ] || fail "user-data.sh must contain the JIT placeholder exactly once (found $placeholders)"
+size=$(wc -c < "$user_data" | tr -d ' ')
+[ "$size" -lt 16384 ] || fail "user-data.sh is $size bytes; EC2 allows 16384"
+grep -Eq '^RUNNER_SHA256_X64="[0-9a-f]{64}"$' "$user_data" || fail "x64 runner checksum is not pinned"
+grep -Eq '^RUNNER_SHA256_ARM64="[0-9a-f]{64}"$' "$user_data" || fail "arm64 runner checksum is not pinned"
+if grep -Eq 'set -x|xtrace' "$user_data"; then fail "user-data.sh must never enable tracing"; fi
+if grep -Eq '\|[[:space:]]*(ba|z)?sh([[:space:]]|$)' "$user_data"; then fail "user-data.sh must not pipe content into a shell"; fi
+
 printf 'test: PASS\n'
