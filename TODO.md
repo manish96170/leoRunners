@@ -36,7 +36,7 @@ first as the target experience, then the gaps they expose are built.
 - [ ] 2.2c Runner layer: launch template, runner IAM role and instance profile, runner network, behind the `aws-ephemeral-runner` contract.
 - [ ] 2.2d Publish an official controller image (digest list per release).
 - [ ] 2.2e Wire multi-replica coordination into the executable, then relax `desired_count`.
-- [ ] 2.2f Acknowledge webhooks quickly and orchestrate asynchronously (handler currently runs orchestration inside the request).
+- [x] 2.2f Acknowledge webhooks quickly and orchestrate asynchronously (`controller/internal/dispatch`; measured 16s on a cold launch against an emulator before the change). A durable queue is a possible follow-up.
 - [ ] 2.3 GitHub App manifest for one-click App creation.
 - [ ] 2.4 Job-level sizing labels in `runs-on:` (confirm whether label parsing exists).
 - [ ] 2.5 End-to-end smoke test against a disposable AWS account and test repo.

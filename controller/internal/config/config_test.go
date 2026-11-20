@@ -366,3 +366,39 @@ func TestLoadFromTreatsEmptyGitHubAppSettingsAsUnset(t *testing.T) {
 		t.Fatalf("empty App settings = %+v, %v", c.GitHubJIT, err)
 	}
 }
+
+func TestLoadFromWebhookProcessingDefaultsAndOverrides(t *testing.T) {
+	c, err := LoadFrom(validEnv())
+	if err != nil || c.Webhook.Workers != 16 || c.Webhook.QueueSize != 1024 || c.Webhook.EventTimeout != 30*time.Minute {
+		t.Fatalf("defaults = %+v, %v", c.Webhook, err)
+	}
+	env := validEnv()
+	env["WEBHOOK_WORKERS"] = "4"
+	env["WEBHOOK_QUEUE_SIZE"] = "64"
+	env["WEBHOOK_EVENT_TIMEOUT"] = "10m"
+	c, err = LoadFrom(env)
+	if err != nil || c.Webhook.Workers != 4 || c.Webhook.QueueSize != 64 || c.Webhook.EventTimeout != 10*time.Minute {
+		t.Fatalf("overrides = %+v, %v", c.Webhook, err)
+	}
+}
+
+func TestLoadFromRejectsUnsafeWebhookProcessingSettings(t *testing.T) {
+	bad := []map[string]string{
+		{"WEBHOOK_WORKERS": "0"},
+		{"WEBHOOK_WORKERS": "257"},
+		{"WEBHOOK_WORKERS": "8", "WEBHOOK_QUEUE_SIZE": "4"},
+		{"WEBHOOK_QUEUE_SIZE": "100001"},
+		{"WEBHOOK_EVENT_TIMEOUT": "25h"},
+		{"WEBHOOK_EVENT_TIMEOUT": "soon"},
+		{"WEBHOOK_WORKERS": "many"},
+	}
+	for _, extra := range bad {
+		env := validEnv()
+		for k, v := range extra {
+			env[k] = v
+		}
+		if _, err := LoadFrom(env); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%v: error = %v, want ErrInvalid", extra, err)
+		}
+	}
+}
