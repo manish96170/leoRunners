@@ -50,6 +50,46 @@ bootstrap does not call `config.sh`, create a persistent registration, or add
 an ordinary non-ephemeral runner. The runner exits after its assigned job and
 the controller should terminate the instance afterward.
 
+## User-data template (`user-data.sh`)
+
+`user-data.sh` is the launch-time script for instances whose image does not
+already contain the GitHub runner. Point `RUNNER_USER_DATA_FILE` at it. The
+controller replaces `{{GITHUB_JIT_CONFIG_B64}}` (exactly one occurrence) with the
+one-time JIT value, shell-quoted, and base64-encodes the result for EC2.
+
+It, in order:
+
+1. uses a runner already installed in `/opt/actions-runner` if the image has one;
+   otherwise downloads the **pinned** runner release for the machine's
+   architecture and **verifies its SHA-256 before extracting anything**, then
+   installs the runtime dependencies;
+2. creates an unprivileged `runner` user (the runner refuses to run as root);
+3. hands the JIT value to that user through a private file that is deleted as
+   soon as it is read;
+4. runs exactly one job, then powers the instance off.
+
+The pinned version and hashes are at the top of the file. GitHub stops accepting
+registrations from runners that are too old, so re-pin regularly:
+
+```sh
+bootstrap/runner/pin-latest-runner.sh   # prints the values; review, then edit user-data.sh
+```
+
+Downloading at every launch is slow (about a minute on a fast connection) and
+depends on GitHub being reachable. Production images should pre-bake the runner (`ami/`); this template
+is the fallback and the path used by `tools/local-rehearsal`.
+
+Things to know:
+
+- Anything on the instance, including workflow code, can read user data from the
+  metadata service. The JIT value is single use and is spent as soon as the runner
+  registers, so a later reader gets nothing usable. IMDSv2 with a hop limit of 1
+  (enforced by the AWS provider) keeps containers on the instance from reaching it.
+- The template never enables shell tracing, which would print the JIT value into
+  the instance logs. A test enforces this.
+- Tests: `./test.sh` (static checks) and the controller's
+  `TestShippedUserData*` tests, which render the real file through the provider.
+
 ## Security and lifecycle behavior
 
 - `umask 077` and `chmod 600` protect the encoded temporary file.

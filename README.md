@@ -49,6 +49,7 @@ Reusable Terraform modules for the controller, the HTTPS front door, and the run
 | `terraform/` | Modules and examples: generic AWS deployment modules (`aws-*`), DynamoDB state, IAM, network, observability, dev composition |
 | `deploy/kubernetes/` | Kubernetes manifests for the controller |
 | `docs/` | Architecture, provider, security and operations documentation |
+| `tools/local-rehearsal/` | Run the whole flow on one machine against a local AWS emulator and a tunnel, with a real test repository |
 | `tools/` | Validation, benchmark and smoke-test tooling |
 
 Maintainer phase plans and approval-gated validation runbooks also live under `docs/`.
