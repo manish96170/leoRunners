@@ -10,7 +10,9 @@ adapter, not a deployable table or a migration command.
 - Sort key: `sk` (string).
 - Billing mode: `PAY_PER_REQUEST` initially. Revisit only with measured,
   stable traffic and an explicit capacity review.
-- TTL attribute: `expiresAt` (number, Unix seconds) on expiring records.
+- Expiry attribute: `expires_at` (number, Unix seconds) is the logical expiry that
+  drives reaping. TTL attribute: `ttl_at`, seven days after `expires_at`, so a
+  record is never deleted at the moment the reaper needs it.
 - Optional GSI1: `gsi1pk`, `gsi1sk` for bounded state scans.
 - Optional GSI2: `gsi2pk`, `gsi2sk` for expiry/reaper work when the table is too
   large for partition-local queries.

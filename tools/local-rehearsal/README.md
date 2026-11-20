@@ -132,6 +132,24 @@ the job completed.
 Labels must match exactly. A job asking for a label the controller does not allow
 is rejected, and forks are denied by default.
 
+## Check that expired runners are cleaned up
+
+```sh
+tools/local-rehearsal/check-reaper.sh
+```
+
+About two minutes, no GitHub needed. It checks that:
+
+1. a runner whose expiry passes while the controller is down is terminated after
+   the controller restarts, and its record survives;
+2. instances the controller has **no record of** are removed only when they are
+   ours and past their own expiry. Instances that are still valid, have no
+   expiry marker, or are not tagged as ours are left alone.
+
+It exists because the first run of this check found that a runner could be
+orphaned: the table's TTL fired at the same instant the reaper needed the
+record. See `docs/aws-provider.md`.
+
 ## Tear down
 
 ```sh

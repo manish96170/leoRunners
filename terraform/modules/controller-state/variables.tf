@@ -20,9 +20,9 @@ variable "billing_mode" {
 }
 
 variable "ttl_attribute" {
-  description = "Numeric Unix epoch-seconds attribute used for asynchronous DynamoDB TTL cleanup."
+  description = "Numeric Unix epoch-seconds attribute used for asynchronous DynamoDB TTL cleanup. It must be the controller's ttl_at attribute, which lies seven days after a record's logical expiry. Do not point it at expires_at: that is the instant the reaper must act, and DynamoDB can delete a record at any time after its TTL, leaving a runner with nothing to explain it."
   type        = string
-  default     = "expires_at"
+  default     = "ttl_at"
 
   validation {
     condition     = can(regex("^[A-Za-z][A-Za-z0-9_]{0,254}$", var.ttl_attribute))

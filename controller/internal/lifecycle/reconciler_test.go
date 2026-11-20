@@ -279,3 +279,134 @@ func assertJobState(t *testing.T, repo *state.MemoryRepository, id string, want 
 		t.Fatalf("job %s state=%s, want %s", id, job.State, want)
 	}
 }
+
+// ---- provider-side backstop ------------------------------------------------
+
+func provisionWithExpiry(t *testing.T, provider *providers.FakeProvider, expires time.Time) providers.RunnerInstance {
+	t.Helper()
+	instance, err := provider.Provision(context.Background(), providers.RunnerSpec{ExpiresAt: expires})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := provider.SetStatus(instance.ID, providers.StatusReady); err != nil {
+		t.Fatal(err)
+	}
+	return instance
+}
+
+func providerStatus(t *testing.T, provider *providers.FakeProvider, instance providers.RunnerInstance) providers.RunnerStatus {
+	t.Helper()
+	status, err := provider.Status(context.Background(), instance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return status
+}
+
+// The state-driven reaper cannot remove what it has no record of. Records are
+// lost to crashes, table wipes and retention policies, so an instance past its
+// own expiry must still be removed.
+func TestReconcileReapsAnExpiredInstanceThatHasNoRecordAtAll(t *testing.T) {
+	provider := providers.NewFakeProvider(providers.FakeConfig{})
+	now := time.Unix(100000, 0).UTC()
+	orphan := provisionWithExpiry(t, provider, now.Add(-time.Hour))
+
+	report, err := (&Reconciler{State: state.NewMemoryRepository(), Provider: provider}).Reconcile(context.Background(), now)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if report.OrphansReaped != 1 {
+		t.Fatalf("OrphansReaped = %d, want 1", report.OrphansReaped)
+	}
+	if got := providerStatus(t, provider, orphan); got != providers.StatusTerminated {
+		t.Fatalf("orphan status = %s, want terminated", got)
+	}
+}
+
+func TestBackstopNeverRemovesWhatItShouldNot(t *testing.T) {
+	provider := providers.NewFakeProvider(providers.FakeConfig{})
+	now := time.Unix(100000, 0).UTC()
+	withinGrace := provisionWithExpiry(t, provider, now.Add(-time.Minute))       // expired, but the normal reaper owns it
+	notExpired := provisionWithExpiry(t, provider, now.Add(time.Hour))           // still valid
+	noMarker := provisionWithExpiry(t, provider, time.Time{})                    // expiry unknown: never grounds for removal
+	justAfterGrace := provisionWithExpiry(t, provider, now.Add(-11*time.Minute)) // past the default 10 minute grace
+
+	report, err := (&Reconciler{State: state.NewMemoryRepository(), Provider: provider}).Reconcile(context.Background(), now)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if report.OrphansReaped != 1 {
+		t.Fatalf("OrphansReaped = %d, want exactly the one past the grace period", report.OrphansReaped)
+	}
+	for name, instance := range map[string]providers.RunnerInstance{"within grace": withinGrace, "not expired": notExpired, "no expiry marker": noMarker} {
+		if got := providerStatus(t, provider, instance); got == providers.StatusTerminated {
+			t.Errorf("%s instance was terminated", name)
+		}
+	}
+	if got := providerStatus(t, provider, justAfterGrace); got != providers.StatusTerminated {
+		t.Errorf("instance past the grace period status = %s, want terminated", got)
+	}
+}
+
+func TestBackstopGraceIsConfigurable(t *testing.T) {
+	provider := providers.NewFakeProvider(providers.FakeConfig{})
+	now := time.Unix(100000, 0).UTC()
+	instance := provisionWithExpiry(t, provider, now.Add(-2*time.Minute))
+	report, err := (&Reconciler{State: state.NewMemoryRepository(), Provider: provider, OrphanGrace: time.Minute}).Reconcile(context.Background(), now)
+	if err != nil || report.OrphansReaped != 1 {
+		t.Fatalf("report = %+v, error = %v", report, err)
+	}
+	if providerStatus(t, provider, instance) != providers.StatusTerminated {
+		t.Fatal("instance past a one minute grace was not terminated")
+	}
+}
+
+func TestBackstopIsIdempotentAndDoesNotDoubleCountWithTheStateReaper(t *testing.T) {
+	ctx := context.Background()
+	repo := state.NewMemoryRepository()
+	provider := providers.NewFakeProvider(providers.FakeConfig{})
+	now := time.Unix(100000, 0).UTC()
+	instance := provisionWithExpiry(t, provider, now.Add(-time.Hour))
+	job := state.Job{ID: "job-1", State: state.JobAssigned, ExpiresAt: now.Add(-time.Hour)}
+	runner := state.Runner{ID: instance.ID, JobID: job.ID, Provider: "fake", ProviderInstanceID: instance.ProviderID, State: state.RunnerReady, ExpiresAt: job.ExpiresAt}
+	createRecords(t, repo, job, runner, state.Lease{ID: "lease-1", JobID: job.ID, RunnerID: runner.ID, State: state.LeaseActive, ExpiresAt: job.ExpiresAt})
+
+	reconciler := &Reconciler{State: repo, Provider: provider}
+	first, err := reconciler.Reconcile(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if providerStatus(t, provider, instance) != providers.StatusTerminated {
+		t.Fatalf("expired runner was not removed: %+v", first)
+	}
+	if first.OrphansReaped != 0 {
+		t.Fatalf("a runner with a record was counted as an orphan: %+v", first)
+	}
+	second, err := reconciler.Reconcile(ctx, now)
+	if err != nil || second.OrphansReaped != 0 || second.RunnersReaped != 0 {
+		t.Fatalf("second pass changed things: %+v, %v", second, err)
+	}
+}
+
+type listFailingProvider struct{ *providers.FakeProvider }
+
+func (listFailingProvider) ListManaged(context.Context) ([]providers.RunnerInstance, error) {
+	return nil, errors.New("list is unavailable")
+}
+
+func TestBackstopListFailureIsReportedWithoutBlockingOtherRepairs(t *testing.T) {
+	ctx := context.Background()
+	repo := state.NewMemoryRepository()
+	fake := providers.NewFakeProvider(providers.FakeConfig{})
+	now := time.Unix(100000, 0).UTC()
+	instance := provisionWithExpiry(t, fake, now.Add(time.Hour))
+	job := state.Job{ID: "job-1", State: state.JobProvisioning, ExpiresAt: now.Add(time.Hour)}
+	runner := state.Runner{ID: instance.ID, JobID: job.ID, Provider: "fake", ProviderInstanceID: instance.ProviderID, State: state.RunnerProvisioning, ExpiresAt: job.ExpiresAt}
+	createRecords(t, repo, job, runner, state.Lease{ID: "lease-1", JobID: job.ID, RunnerID: runner.ID, State: state.LeasePending, ExpiresAt: job.ExpiresAt})
+
+	report, err := (&Reconciler{State: repo, Provider: listFailingProvider{fake}}).Reconcile(ctx, now)
+	if err == nil || report.ProviderErrors == 0 {
+		t.Fatalf("a failing list must be reported: %+v, %v", report, err)
+	}
+	assertRunnerState(t, repo, runner.ID, state.RunnerReady) // the ordinary repair still happened
+}

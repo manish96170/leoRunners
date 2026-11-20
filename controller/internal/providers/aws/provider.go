@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -305,6 +306,76 @@ func (p *Provider) Terminate(ctx context.Context, instance providers.RunnerInsta
 		return fmt.Errorf("terminate EC2 instance: %w", err)
 	}
 	return nil
+}
+
+var _ providers.ManagedLister = (*Provider)(nil)
+
+// ListManaged returns the runner instances this deployment owns that have not
+// terminated, found by ownership tag rather than from controller state. Any
+// custom tags in Config.Tags must match too, so deployments that share an
+// account can keep their instances apart by tagging them differently.
+func (p *Provider) ListManaged(ctx context.Context) ([]providers.RunnerInstance, error) {
+	if err := contextErr(ctx); err != nil {
+		return nil, err
+	}
+	filters := []types.Filter{
+		{Name: awsv2.String("tag:" + managedByTag), Values: []string{"leo-runners"}},
+		{Name: awsv2.String("instance-state-name"), Values: []string{"pending", "running", "stopping", "stopped"}},
+	}
+	keys := make([]string, 0, len(p.config.Tags))
+	for key := range p.config.Tags {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		filters = append(filters, types.Filter{Name: awsv2.String("tag:" + key), Values: []string{p.config.Tags[key]}})
+	}
+
+	var out []providers.RunnerInstance
+	var token *string
+	for {
+		page, err := p.client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{Filters: filters, NextToken: token})
+		if err != nil {
+			return nil, fmt.Errorf("list managed EC2 instances: %w", err)
+		}
+		for _, reservation := range page.Reservations {
+			for _, instance := range reservation.Instances {
+				if instance.InstanceId == nil || instance.State == nil {
+					continue
+				}
+				out = append(out, managedInstance(instance))
+			}
+		}
+		if page.NextToken == nil || *page.NextToken == "" {
+			return out, nil
+		}
+		token = page.NextToken
+	}
+}
+
+func managedInstance(instance types.Instance) providers.RunnerInstance {
+	tags := make(map[string]string, len(instance.Tags))
+	for _, tag := range instance.Tags {
+		tags[awsv2.ToString(tag.Key)] = awsv2.ToString(tag.Value)
+	}
+	result := providers.RunnerInstance{ID: tags[runnerIDTag], ProviderID: awsv2.ToString(instance.InstanceId), Provider: "aws"}
+	if expires, err := time.Parse(time.RFC3339, tags[expiresAtTag]); err == nil {
+		result.ExpiresAt = expires.UTC()
+	}
+	if created, err := time.Parse(time.RFC3339, tags[createdAtTag]); err == nil {
+		result.CreatedAt = created.UTC()
+	}
+	switch instance.State.Name {
+	case types.InstanceStateNamePending:
+		result.Status = providers.StatusProvisioning
+	case types.InstanceStateNameRunning:
+		result.Status = providers.StatusReady
+	case types.InstanceStateNameShuttingDown:
+		result.Status = providers.StatusTerminating
+	default:
+		result.Status = providers.StatusFailed
+	}
+	return result
 }
 
 func (p *Provider) tags(runnerID string, spec providers.RunnerSpec) []types.Tag {

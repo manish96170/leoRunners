@@ -41,6 +41,7 @@ first as the target experience, then the gaps they expose are built.
 - [ ] 2.4 Job-level sizing labels in `runs-on:` (confirm whether label parsing exists).
 - [x] 2.5a Local rehearsal harness (`tools/local-rehearsal`): floci + controller + Cloudflare quick tunnel; stage 1 (webhook intake, launch, terminate, restart safety) verified.
 - [x] 2.5b Generic runner user-data template (`bootstrap/runner/user-data.sh`) with a pinned, checksum-verified runner download.
+- [x] 2.5e Reaper verified against the emulator; found and fixed two ways a runner could be orphaned (table TTL on the reaping deadline; no provider-side discovery). See `docs/aws-provider.md`.
 - [ ] 2.5c Run a real workflow job through the rehearsal against a test repository (needs the GitHub App created in a browser).
 - [ ] 2.5d End-to-end smoke test against a disposable AWS account and test repo.
 

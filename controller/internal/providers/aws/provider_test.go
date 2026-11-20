@@ -433,3 +433,91 @@ func TestTerminateHonorsCancellation(t *testing.T) {
 		t.Fatal("TerminateInstances called with canceled context")
 	}
 }
+
+// ---- ListManaged ------------------------------------------------------------
+
+func taggedInstance(id, runnerID, expires string, state types.InstanceStateName) types.Instance {
+	tags := []types.Tag{{Key: awsv2.String(managedByTag), Value: awsv2.String("leo-runners")}}
+	if runnerID != "" {
+		tags = append(tags, types.Tag{Key: awsv2.String(runnerIDTag), Value: awsv2.String(runnerID)})
+	}
+	if expires != "" {
+		tags = append(tags, types.Tag{Key: awsv2.String(expiresAtTag), Value: awsv2.String(expires)})
+	}
+	return types.Instance{InstanceId: awsv2.String(id), State: &types.InstanceState{Name: state}, Tags: tags}
+}
+
+func TestListManagedFindsOwnedInstancesByTagNotByID(t *testing.T) {
+	config := testConfig()
+	config.Tags = map[string]string{"team": "platform"}
+	client := &mockEC2{describeOutputs: []*ec2.DescribeInstancesOutput{{Reservations: []types.Reservation{{Instances: []types.Instance{
+		taggedInstance("i-1", "runner-1", "2026-01-01T00:00:00Z", types.InstanceStateNameRunning),
+		taggedInstance("i-2", "runner-2", "", types.InstanceStateNamePending),
+		taggedInstance("i-3", "runner-3", "not-a-time", types.InstanceStateNameStopped),
+		{State: &types.InstanceState{Name: types.InstanceStateNameRunning}},
+	}}}}}}
+	provider, err := New(client, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := provider.ListManaged(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("listed %d instances, want 3 (the one with no instance ID is skipped): %+v", len(got), got)
+	}
+	if got[0].ProviderID != "i-1" || got[0].ID != "runner-1" || !got[0].ExpiresAt.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)) || got[0].Status != providers.StatusReady {
+		t.Fatalf("first instance = %+v", got[0])
+	}
+	if !got[1].ExpiresAt.IsZero() || !got[2].ExpiresAt.IsZero() {
+		t.Fatal("a missing or unparseable expiry marker must stay zero so the instance is never removed on that basis")
+	}
+	if got[2].Status != providers.StatusFailed {
+		t.Fatalf("stopped instance status = %s, want failed", got[2].Status)
+	}
+
+	if len(client.describeInputs) != 1 {
+		t.Fatalf("describe calls = %d", len(client.describeInputs))
+	}
+	input := client.describeInputs[0]
+	if len(input.InstanceIds) != 0 {
+		t.Fatal("listing must not depend on known instance IDs")
+	}
+	filters := map[string][]string{}
+	for _, f := range input.Filters {
+		filters[awsv2.ToString(f.Name)] = f.Values
+	}
+	if v := filters["tag:"+managedByTag]; len(v) != 1 || v[0] != "leo-runners" {
+		t.Fatalf("ownership filter = %v", filters)
+	}
+	if v := filters["tag:team"]; len(v) != 1 || v[0] != "platform" {
+		t.Fatalf("custom tags must narrow the listing: %v", filters)
+	}
+	for _, state := range filters["instance-state-name"] {
+		if state == "terminated" || state == "shutting-down" {
+			t.Fatalf("listing includes %s instances: %v", state, filters)
+		}
+	}
+}
+
+func TestListManagedFollowsPagination(t *testing.T) {
+	first := &ec2.DescribeInstancesOutput{NextToken: awsv2.String("page-2"), Reservations: []types.Reservation{{Instances: []types.Instance{taggedInstance("i-1", "r1", "", types.InstanceStateNameRunning)}}}}
+	second := &ec2.DescribeInstancesOutput{Reservations: []types.Reservation{{Instances: []types.Instance{taggedInstance("i-2", "r2", "", types.InstanceStateNameRunning)}}}}
+	client := &mockEC2{describeOutputs: []*ec2.DescribeInstancesOutput{first, second}}
+	provider, _ := New(client, testConfig())
+	got, err := provider.ListManaged(context.Background())
+	if err != nil || len(got) != 2 {
+		t.Fatalf("got %d instances, error = %v", len(got), err)
+	}
+	if token := awsv2.ToString(client.describeInputs[1].NextToken); token != "page-2" {
+		t.Fatalf("second request token = %q", token)
+	}
+}
+
+func TestListManagedReportsAWSErrors(t *testing.T) {
+	provider, _ := New(&mockEC2{describeErr: errors.New("throttled")}, testConfig())
+	if _, err := provider.ListManaged(context.Background()); err == nil || !strings.Contains(err.Error(), "throttled") {
+		t.Fatalf("error = %v", err)
+	}
+}

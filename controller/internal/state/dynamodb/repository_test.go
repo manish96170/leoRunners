@@ -3,6 +3,7 @@ package dynamodb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -211,5 +212,66 @@ func TestContextCancellation(t *testing.T) {
 	cancel()
 	if _, err := r.GetJob(ctx, "x"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func numberAttr(t *testing.T, f *fakeDynamo, pk, name string) (int64, bool) {
+	t.Helper()
+	value, ok := f.items[pk+"|"+metaSK][name]
+	if !ok {
+		return 0, false
+	}
+	var n int64
+	if _, err := fmt.Sscan(value.(*types.AttributeValueMemberN).Value, &n); err != nil {
+		t.Fatal(err)
+	}
+	return n, true
+}
+
+// The table's TTL must never be the same instant the reaper needs a record:
+// DynamoDB can delete an expired item at any time, and a deleted runner record
+// leaves its instance with nothing to explain it.
+func TestTTLOutlivesTheLogicalExpiryForJobsRunnersAndLeases(t *testing.T) {
+	r, f := testRepo(t)
+	ctx := context.Background()
+	created := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	expires := created.Add(2 * time.Hour)
+	if err := r.CreateJob(ctx, state.Job{ID: "job-ttl", State: state.JobQueued, CreatedAt: created, ExpiresAt: expires}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CreateRunner(ctx, state.Runner{ID: "runner-ttl", JobID: "job-ttl", State: state.RunnerReady, CreatedAt: created, ExpiresAt: expires}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CreateLease(ctx, state.Lease{ID: "lease-ttl", JobID: "job-ttl", RunnerID: "runner-ttl", State: state.LeaseActive, CreatedAt: created, ExpiresAt: expires}); err != nil {
+		t.Fatal(err)
+	}
+	for _, pk := range []string{"job#job-ttl", "runner#runner-ttl", "lease#lease-ttl"} {
+		logical, ok := numberAttr(t, f, pk, "expires_at")
+		if !ok || logical != expires.Unix() {
+			t.Fatalf("%s: expires_at = %d (present=%v), want the logical expiry %d", pk, logical, ok, expires.Unix())
+		}
+		ttl, ok := numberAttr(t, f, pk, "ttl_at")
+		if !ok {
+			t.Fatalf("%s: no ttl_at attribute", pk)
+		}
+		if want := expires.Add(recordRetention).Unix(); ttl != want {
+			t.Fatalf("%s: ttl_at = %d, want expiry + retention = %d", pk, ttl, want)
+		}
+		if ttl <= logical {
+			t.Fatalf("%s: TTL must come after the logical expiry", pk)
+		}
+	}
+	if recordRetention < 24*time.Hour {
+		t.Fatalf("retention %s is too short to cover a controller outage", recordRetention)
+	}
+}
+
+func TestRecordsWithoutAnExpiryGetNoTTL(t *testing.T) {
+	r, f := testRepo(t)
+	if err := r.CreateRunner(context.Background(), state.Runner{ID: "no-expiry", State: state.RunnerReady}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := numberAttr(t, f, "runner#no-expiry", "ttl_at"); ok {
+		t.Fatal("a record with no expiry must not get a TTL")
 	}
 }

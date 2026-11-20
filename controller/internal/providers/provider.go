@@ -56,6 +56,19 @@ type Provider interface {
 
 type RunnerProvider = Provider
 
+// ManagedLister is implemented by providers that can list the live runners they
+// own without consulting controller state. The reconciler uses it as a backstop:
+// a runner whose record is missing (lost to a crash, a retention policy, or a
+// wiped table) must still be removed once it is past its own expiry.
+//
+// Implementations return only instances that are not yet terminated, with
+// ExpiresAt taken from the provider-side expiry marker. An instance whose
+// expiry marker is absent or unreadable is returned with a zero ExpiresAt and
+// must never be removed on that basis.
+type ManagedLister interface {
+	ListManaged(context.Context) ([]RunnerInstance, error)
+}
+
 var (
 	ErrCapacity         = errors.New("provider capacity exhausted")
 	ErrCapacityExceeded = ErrCapacity
@@ -207,6 +220,25 @@ func (f *FakeProvider) Active() int {
 }
 
 func (f *FakeProvider) ActiveCount() int { return f.Active() }
+
+// ListManaged returns every instance that is not terminated, like a cloud
+// provider listing by ownership tag.
+func (f *FakeProvider) ListManaged(ctx context.Context) ([]RunnerInstance, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []RunnerInstance
+	for _, instance := range f.instances {
+		if instance.Status != StatusTerminated {
+			out = append(out, cloneInstance(instance))
+		}
+	}
+	return out, nil
+}
+
+var _ ManagedLister = (*FakeProvider)(nil)
 
 func (f *FakeProvider) activeLocked() int {
 	active := 0
