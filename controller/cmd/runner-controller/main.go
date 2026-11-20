@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"io"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +18,7 @@ import (
 	"github.com/leo-runners/ci-platform/controller/internal/capacity"
 	runtimeconfig "github.com/leo-runners/ci-platform/controller/internal/config"
 	"github.com/leo-runners/ci-platform/controller/internal/controller"
+	"github.com/leo-runners/ci-platform/controller/internal/dispatch"
 	"github.com/leo-runners/ci-platform/controller/internal/events"
 	eventarchive "github.com/leo-runners/ci-platform/controller/internal/events/archive"
 	"github.com/leo-runners/ci-platform/controller/internal/extensions"
@@ -92,51 +93,69 @@ func main() {
 	startReconciliation(repository, provider)
 
 	secret := runtime.Webhook.Secret
+	// Acknowledge GitHub immediately and do the work in the background. GitHub
+	// abandons a delivery after about ten seconds, and a hung-up request used to
+	// cancel the provision it was waiting for.
+	dispatcher, err := dispatch.New(service.HandleWorkflowJob, dispatch.Config{
+		Workers: runtime.Webhook.Workers, QueueSize: runtime.Webhook.QueueSize, EventTimeout: runtime.Webhook.EventTimeout,
+		OnResult: func(result dispatch.Result) { logWebhookResult(metrics, result) },
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
 	mux.Handle("/metrics", metrics)
-	mux.HandleFunc("/webhooks/github", func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, runtime.Webhook.MaxBodyBytes))
-		if err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		if !github.VerifyRequest(secret, r, body) {
-			http.Error(w, "invalid signature", http.StatusUnauthorized)
-			return
-		}
-		event, err := github.NormalizeWorkflowJobHeaders(body, r.Header, time.Now().UTC())
-		if err != nil {
-			http.Error(w, "invalid event", http.StatusBadRequest)
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
-		defer cancel()
-		if err := service.HandleWorkflowJob(ctx, event); err != nil {
-			log.Printf("workflow job %s failed: %v", event.JobKey, err)
-			http.Error(w, "workflow processing failed", http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
-	})
+	mux.Handle("/webhooks/github", newWebhookHandler(secret, runtime.Webhook.MaxBodyBytes, dispatcher, metrics))
 	server := &http.Server{Addr: runtime.Server.ListenAddr, Handler: mux, ReadHeaderTimeout: runtime.Server.ReadHeaderTimeout}
 	log.Printf("runner controller listening on %s", server.Addr)
 	shutdownSignal, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSignals()
+	stopped := make(chan struct{})
 	go func() {
+		defer close(stopped)
 		<-shutdownSignal.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Printf("graceful shutdown failed: %v", err)
+		httpCtx, cancelHTTP := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelHTTP()
+		if err := server.Shutdown(httpCtx); err != nil {
+			log.Printf("graceful HTTP shutdown failed: %v", err)
+		}
+		// Let accepted events finish. Whatever is still running at the deadline
+		// is cancelled; the reconciler removes any runner it left behind.
+		drainCtx, cancelDrain := context.WithTimeout(context.Background(), shutdownDrainTimeout)
+		defer cancelDrain()
+		if err := dispatcher.Shutdown(drainCtx); err != nil {
+			log.Printf("webhook drain incomplete: %v", err)
 		}
 	}()
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+	<-stopped
+}
+
+// shutdownDrainTimeout must stay below the platform's stop timeout (the
+// aws-ecs-controller module sets 35 seconds).
+const shutdownDrainTimeout = 25 * time.Second
+
+func logWebhookResult(metrics *prometheus.Exporter, result dispatch.Result) {
+	outcome := "ok"
+	switch {
+	case result.Err == nil:
+	case errors.Is(result.Err, dispatch.ErrAbandoned):
+		outcome = "abandoned"
+	default:
+		outcome = "failed"
+	}
+	_ = metrics.IncCounter("webhook_events_total", prometheus.Labels{"outcome": outcome})
+	if result.Err != nil {
+		log.Printf("workflow job %s (%s, delivery %s) %s after %s: %v", result.Event.JobKey, result.Event.Action, result.Event.DeliveryID, outcome, result.Duration.Round(time.Millisecond), result.Err)
+		return
+	}
+	log.Printf("workflow job %s (%s, delivery %s) handled in %s", result.Event.JobKey, result.Event.Action, result.Event.DeliveryID, result.Duration.Round(time.Millisecond))
 }
 
 type telemetryFanout struct{ sinks []telemetry.Sink }

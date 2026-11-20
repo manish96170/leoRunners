@@ -114,6 +114,11 @@ type ServerConfig struct {
 type WebhookConfig struct {
 	Secret       string
 	MaxBodyBytes int64
+	// Workers, QueueSize and EventTimeout shape the background processing that
+	// lets the endpoint acknowledge GitHub immediately.
+	Workers      int
+	QueueSize    int
+	EventTimeout time.Duration
 }
 
 type StateConfig struct {
@@ -250,7 +255,7 @@ func (c ExtensionsConfig) Validate() error {
 func Defaults() Config {
 	return Config{
 		Server:         ServerConfig{ListenAddr: ":8080", ReadHeaderTimeout: 5 * time.Second, MaxBodyBytes: 2 << 20},
-		Webhook:        WebhookConfig{MaxBodyBytes: 2 << 20},
+		Webhook:        WebhookConfig{MaxBodyBytes: 2 << 20, Workers: 16, QueueSize: 1024, EventTimeout: 30 * time.Minute},
 		State:          StateConfig{Backend: "memory", StateIndexName: "gsi1", ExpiryIndexName: "gsi2"},
 		Reconciliation: ReconciliationConfig{Interval: 30 * time.Second, OperationTimeout: 30 * time.Second, MaxRecords: 1000},
 		Provider:       ProviderConfig{Name: ProviderFake, AWS: AWSConfig{Region: "us-east-1"}, GCP: GCPConfig{Zone: "us-central1-a", NamePrefix: "leo-runner"}},
@@ -281,6 +286,15 @@ func LoadFrom(env map[string]string) (Config, error) {
 	}
 	c.Webhook.Secret = get("GITHUB_WEBHOOK_SECRET")
 	if c.Webhook.MaxBodyBytes, err = optionalInt64(env, "WEBHOOK_MAX_BODY_BYTES", c.Webhook.MaxBodyBytes); err != nil {
+		return c, err
+	}
+	if c.Webhook.Workers, err = optionalInt(env, "WEBHOOK_WORKERS", c.Webhook.Workers); err != nil {
+		return c, err
+	}
+	if c.Webhook.QueueSize, err = optionalInt(env, "WEBHOOK_QUEUE_SIZE", c.Webhook.QueueSize); err != nil {
+		return c, err
+	}
+	if c.Webhook.EventTimeout, err = optionalDuration(env, "WEBHOOK_EVENT_TIMEOUT", c.Webhook.EventTimeout); err != nil {
 		return c, err
 	}
 	c.State.Path = get("STATE_PATH")
@@ -427,6 +441,15 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.Webhook.Secret) == "" {
 		problems = append(problems, "GITHUB_WEBHOOK_SECRET is required")
+	}
+	if c.Webhook.Workers < 1 || c.Webhook.Workers > 256 {
+		problems = append(problems, "WEBHOOK_WORKERS must be between 1 and 256")
+	}
+	if c.Webhook.QueueSize < c.Webhook.Workers || c.Webhook.QueueSize > 100000 {
+		problems = append(problems, "WEBHOOK_QUEUE_SIZE must be at least WEBHOOK_WORKERS and at most 100000")
+	}
+	if c.Webhook.EventTimeout <= 0 || c.Webhook.EventTimeout > 24*time.Hour {
+		problems = append(problems, "WEBHOOK_EVENT_TIMEOUT must be positive and at most 24h")
 	}
 	if c.Reconciliation.Interval <= 0 || c.Reconciliation.OperationTimeout <= 0 {
 		problems = append(problems, "reconciliation durations must be positive")

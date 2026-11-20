@@ -80,7 +80,11 @@ or Kubernetes API permissions.
 
 ## Graceful shutdown
 
-The runtime sends `SIGTERM` and allows a termination grace period. Production
+The webhook endpoint acknowledges GitHub immediately and processes events in
+the background (see `docs/github-runtime-contract.md`). On `SIGTERM` the
+controller stops accepting events, lets accepted ones finish for up to 25
+seconds, then cancels the rest. Keep the platform's stop timeout above 30
+seconds. The runtime sends `SIGTERM` and allows a termination grace period. Production
 readiness requires the controller to stop accepting new work, finish or safely
 cancel in-flight orchestration within a bounded deadline, preserve durable
 state, and leave reaper/reconciliation work recoverable after restart. The

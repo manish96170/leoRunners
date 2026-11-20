@@ -121,6 +121,36 @@ repository scope interact) and is tracked in `TODO.md`. Which endpoint is usable
 can also depend on the GitHub plan and runner-group configuration; confirm in a
 test organization before relying on it.
 
+## Webhook processing
+
+The endpoint verifies the signature, validates the payload, queues the event,
+and answers `202` immediately. Provisioning happens afterwards in the
+background. GitHub abandons a delivery after about ten seconds, while starting a
+runner takes longer, and a request that GitHub hung up used to cancel the
+provision it was waiting for.
+
+| Response | Meaning |
+|---|---|
+| `202` | accepted; processing continues in the background |
+| `401` | missing or wrong signature |
+| `400` | unreadable body, body over `WEBHOOK_MAX_BODY_BYTES`, or an unsupported payload |
+| `503` | the backlog is full or the controller is shutting down; redeliver the event from GitHub's delivery log |
+
+Guarantees:
+
+- Events for the same job run one at a time, in arrival order, so `completed` can never overtake `queued`.
+- Events for different jobs run concurrently, up to `WEBHOOK_WORKERS` (default 16). A slow job never delays another.
+- At most `WEBHOOK_QUEUE_SIZE` events (default 1024) wait or run. Beyond that the endpoint answers `503` at once.
+- Each event has its own `WEBHOOK_EVENT_TIMEOUT` (default 30 minutes), independent of the request.
+- On `SIGTERM` the controller stops accepting events, finishes accepted ones for up to 25 seconds, then cancels what is left. The service's stop timeout (35 seconds in `aws-ecs-controller`) must stay above that.
+
+What it does not do:
+
+- **A failed job is no longer visible in GitHub's delivery log.** GitHub sees `202`. Failures are logged (`workflow job ... failed`) and counted in the `webhook_events_total` metric with `outcome="failed"`. Alert on that counter. A failed event releases its idempotency record, so redelivering it from GitHub retries it.
+- **The queue is in memory.** An event acknowledged but not finished when the process is killed is lost. The reconciler terminates any runner that was already created, and the event can be redelivered. A durable queue is a possible follow-up.
+
+Outcomes of `webhook_events_total`: `ok`, `failed`, `abandoned` (dropped at shutdown) and `rejected` (answered `503`).
+
 ## Status and known limits
 
 - GitHub App authentication is tested against a fake GitHub server with a
@@ -130,11 +160,9 @@ test organization before relying on it.
   installations from one controller needs a change to how tokens are requested.
 - One controller replica: the coordination package exists but is not wired into
   the executable, so `desired_count` is limited to 0 or 1.
-- The webhook handler runs the job's orchestration inside the HTTP request with
-  a long context. GitHub expects an answer in about 10 seconds and the ALB idle
-  timeout defaults to 60 seconds. Verify queued-event handling latency against
-  real provisioning, and consider acknowledging quickly and working
-  asynchronously.
+- Webhook processing is asynchronous and in memory; see
+  [Webhook processing](#webhook-processing). An accepted event that has not
+  finished when the process dies is lost unless it is redelivered.
 - `GITHUB_API_BASE_URL` is passed to the client, which allows GitHub Enterprise
   Server, but that has not been tested against a real GHES instance.
   `GITHUB_JIT_REQUEST_TIMEOUT` is applied to the App token request only;
