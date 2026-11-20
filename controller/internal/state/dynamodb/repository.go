@@ -31,6 +31,13 @@ const (
 	metaSK                  = "META"
 	stateIndex              = "gsi1"
 	expiryIndex             = "gsi2"
+
+	// recordRetention is how long a job, runner or lease record outlives its
+	// expiry before DynamoDB may delete it. The expiry is when the reaper must
+	// act, so the record has to still exist then, and for long enough afterwards
+	// to cover a controller outage. Deletion by TTL is also asynchronous and
+	// never proof that a runner was terminated.
+	recordRetention = 7 * 24 * time.Hour
 )
 
 // API is the subset of the AWS SDK client used by Repository. It makes all
@@ -150,7 +157,10 @@ type item struct {
 
 	CreatedAt string `dynamodbav:"created_at,omitempty"`
 	UpdatedAt string `dynamodbav:"updated_at,omitempty"`
-	ExpiresAt int64  `dynamodbav:"expires_at,omitempty"`
+	// ExpiresAt is the logical expiry that drives reaping. It is NOT the TTL
+	// attribute: TTLAt is, and it lies recordRetention later.
+	ExpiresAt int64 `dynamodbav:"expires_at,omitempty"`
+	TTLAt     int64 `dynamodbav:"ttl_at,omitempty"`
 
 	IdempotencyKey string            `dynamodbav:"idempotency_key,omitempty"`
 	Type           string            `dynamodbav:"type,omitempty"`
@@ -178,6 +188,15 @@ func expiryUnix(t time.Time) int64 {
 		return 0
 	}
 	return t.UTC().Unix()
+}
+
+// ttlUnix returns the DynamoDB TTL deadline for a record with the given logical
+// expiry, or 0 (no TTL) when it has none.
+func ttlUnix(expires time.Time) int64 {
+	if expires.IsZero() {
+		return 0
+	}
+	return expires.UTC().Add(recordRetention).Unix()
 }
 
 func unixTime(value int64) time.Time {
@@ -312,7 +331,7 @@ func jobItem(v state.Job) (item, error) {
 	if err != nil {
 		return item{}, err
 	}
-	return item{PK: "job#" + v.ID, SK: metaSK, Entity: entityJob, ID: v.ID, State: string(v.State), Revision: v.Revision, Repository: v.Repository, Workflow: v.Workflow, RunID: v.RunID, JobNumber: v.JobID, Attempt: v.Attempt, Labels: append([]string(nil), v.Labels...), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: expiryUnix(v.ExpiresAt), GSI1PK: "job#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityJob, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
+	return item{PK: "job#" + v.ID, SK: metaSK, Entity: entityJob, ID: v.ID, State: string(v.State), Revision: v.Revision, Repository: v.Repository, Workflow: v.Workflow, RunID: v.RunID, JobNumber: v.JobID, Attempt: v.Attempt, Labels: append([]string(nil), v.Labels...), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: expiryUnix(v.ExpiresAt), TTLAt: ttlUnix(v.ExpiresAt), GSI1PK: "job#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityJob, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
 }
 func runnerItem(v state.Runner) (item, error) {
 	if err := validateID(v.ID); err != nil {
@@ -322,7 +341,7 @@ func runnerItem(v state.Runner) (item, error) {
 	if err != nil {
 		return item{}, err
 	}
-	return item{PK: "runner#" + v.ID, SK: metaSK, Entity: entityRunner, ID: v.ID, JobID: v.JobID, LeaseID: v.LeaseID, Provider: v.Provider, ProviderInstance: v.ProviderInstanceID, CapacityPool: v.CapacityPoolID, CPU: v.CPU, MemoryGB: v.MemoryGB, GPU: v.GPU, Region: v.Region, Labels: append([]string(nil), v.Labels...), State: string(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: expiryUnix(v.ExpiresAt), Revision: v.Revision, GSI1PK: "runner#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityRunner, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
+	return item{PK: "runner#" + v.ID, SK: metaSK, Entity: entityRunner, ID: v.ID, JobID: v.JobID, LeaseID: v.LeaseID, Provider: v.Provider, ProviderInstance: v.ProviderInstanceID, CapacityPool: v.CapacityPoolID, CPU: v.CPU, MemoryGB: v.MemoryGB, GPU: v.GPU, Region: v.Region, Labels: append([]string(nil), v.Labels...), State: string(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: expiryUnix(v.ExpiresAt), TTLAt: ttlUnix(v.ExpiresAt), Revision: v.Revision, GSI1PK: "runner#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityRunner, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
 }
 func leaseItem(v state.Lease) (item, error) {
 	if err := validateID(v.ID); err != nil {
@@ -332,7 +351,7 @@ func leaseItem(v state.Lease) (item, error) {
 	if err != nil {
 		return item{}, err
 	}
-	return item{PK: "lease#" + v.ID, SK: metaSK, Entity: entityLease, ID: v.ID, JobID: v.JobID, RunnerID: v.RunnerID, State: string(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: expiryUnix(v.ExpiresAt), Revision: v.Revision, GSI1PK: "lease#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityLease, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
+	return item{PK: "lease#" + v.ID, SK: metaSK, Entity: entityLease, ID: v.ID, JobID: v.JobID, RunnerID: v.RunnerID, State: string(v.State), ControllerOwner: v.ControllerOwner, CreatedAt: timestamp(created), UpdatedAt: timestamp(updated), ExpiresAt: expiryUnix(v.ExpiresAt), TTLAt: ttlUnix(v.ExpiresAt), Revision: v.Revision, GSI1PK: "lease#state#" + string(v.State), GSI1SK: v.ID, GSI2PK: expiryPK(entityLease, v.ExpiresAt), GSI2SK: expiryKey(v.ExpiresAt, v.ID)}, nil
 }
 
 func (v item) job() (state.Job, error) {

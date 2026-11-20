@@ -13,6 +13,10 @@ import (
 
 const (
 	defaultOperationTimeout = 30 * time.Second
+	// defaultOrphanGrace is how long past its own expiry an instance may live
+	// before the provider-side backstop removes it. The normal reaper acts at
+	// expiry from controller state; the backstop must not race it.
+	defaultOrphanGrace = 10 * time.Minute
 )
 
 // Reconciler compares durable lifecycle records with provider truth and
@@ -24,18 +28,24 @@ type Reconciler struct {
 	OperationTimeout time.Duration
 	MaxRecords       int
 	Now              func() time.Time
+	// OrphanGrace delays the provider-side backstop past an instance's expiry.
+	// Zero selects the default.
+	OrphanGrace time.Duration
 }
 
 // Report describes one reconciliation pass. Errors are also returned joined
 // so callers can alert while still benefiting from independent repairs.
 type Report struct {
-	JobsScanned       int
-	RunnersScanned    int
-	LeasesScanned     int
-	RunnersRepaired   int
-	JobsRepaired      int
-	LeasesRepaired    int
-	RunnersReaped     int
+	JobsScanned     int
+	RunnersScanned  int
+	LeasesScanned   int
+	RunnersRepaired int
+	JobsRepaired    int
+	LeasesRepaired  int
+	RunnersReaped   int
+	// OrphansReaped counts instances removed by the provider-side backstop:
+	// past their own expiry marker with no record that explains them.
+	OrphansReaped     int
 	ProviderErrors    int
 	PersistenceErrors int
 	Errors            []error
@@ -253,7 +263,58 @@ func (r *Reconciler) Reconcile(ctx context.Context, now time.Time) (Report, erro
 
 	_, reapErr := r.reapExpired(ctx, now, &report, runnerByID)
 	_ = reapErr
+	r.reapUnrecorded(ctx, now, &report)
 	return report, report.err()
+}
+
+// reapUnrecorded is the backstop that does not depend on controller state. The
+// state-driven reaper can only remove what it has a record of, and records can
+// be lost: to a crash between launch and persist, a wiped or expired table, or
+// a retention policy. The provider's own list of owned instances, each carrying
+// an expiry marker set at launch, is the second source of truth.
+//
+// An instance is removed only when its marker is present, parses, and lies
+// further in the past than OrphanGrace. A missing or unreadable marker is never
+// grounds for removal.
+func (r *Reconciler) reapUnrecorded(ctx context.Context, now time.Time, report *Report) {
+	lister, ok := r.Provider.(providers.ManagedLister)
+	if !ok {
+		return
+	}
+	listCtx, cancel := r.operationContext(ctx)
+	instances, err := lister.ListManaged(listCtx)
+	cancel()
+	if err != nil {
+		report.ProviderErrors++
+		report.addError(fmt.Errorf("list provider-managed runners: %w", err))
+		return
+	}
+	grace := r.OrphanGrace
+	if grace <= 0 {
+		grace = defaultOrphanGrace
+	}
+	sort.Slice(instances, func(i, j int) bool { return instances[i].ProviderID < instances[j].ProviderID })
+	for _, instance := range instances {
+		if err := contextErr(ctx); err != nil {
+			report.addError(err)
+			return
+		}
+		if instance.ExpiresAt.IsZero() || instance.ExpiresAt.Add(grace).After(now) {
+			continue
+		}
+		if instance.Status == providers.StatusTerminated || instance.Status == providers.StatusTerminating {
+			continue
+		}
+		callCtx, cancel := r.operationContext(ctx)
+		err := r.Provider.Terminate(callCtx, instance)
+		cancel()
+		if err != nil {
+			report.ProviderErrors++
+			report.addError(fmt.Errorf("terminate expired instance %s: %w", instance.ProviderID, err))
+			continue
+		}
+		report.OrphansReaped++
+	}
 }
 
 // ReapExpired is the narrow compatibility operation used by the existing

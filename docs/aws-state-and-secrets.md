@@ -16,7 +16,7 @@ value. `extra_environment` rejects credential-looking keys.
 ## Controller state (DynamoDB)
 
 `aws-ecs-controller` creates the state table with the repository's
-`controller-state` module: on-demand billing, TTL on `expires_at`, sparse
+`controller-state` module: on-demand billing, TTL on `ttl_at` (seven days after a record's expiry), sparse
 lifecycle indexes (`gsi1` state/event, `gsi2` expiry/reaper), encryption at
 rest, point-in-time recovery, and deletion protection (each toggleable).
 

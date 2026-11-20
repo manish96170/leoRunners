@@ -59,7 +59,7 @@ terraform plan -var-file=your-reviewed.tfvars
 ```
 
 Review the plan for exactly one table, two GSIs, `PAY_PER_REQUEST`, TTL on
-`expires_at`, point-in-time recovery, encryption, and deletion protection. Use
+`ttl_at`, point-in-time recovery, encryption, and deletion protection. Use
 `terraform show -json` only in a controlled environment because plans can
 contain sensitive values. A plan does not replace an IAM policy review,
 Access Analyzer check, migration rehearsal, or backup restore exercise.
@@ -88,7 +88,15 @@ is present and cannot be bypassed by an empty or missing request value.
 
 ## State, retention, and backups
 
-- Enable TTL on `expiresAt`, while treating TTL as eventual cleanup only.
+- Enable TTL on `ttl_at`, while treating TTL as eventual cleanup only. The
+  controller writes `expires_at` (when the reaper must act) and `ttl_at`
+  (seven days later). Never point the table's TTL at `expires_at`: DynamoDB may
+  delete an item at any time after its TTL, and a runner record deleted at its
+  own expiry leaves the instance with nothing to explain it.
+  **Existing tables** created with TTL on `expires_at` must be switched to
+  `ttl_at` (`terraform apply` on this module, or `aws dynamodb
+  update-time-to-live`); records written before the controller upgrade have no
+  `ttl_at` and are not deleted by TTL at all, so they are retained until removed.
 - Keep controller reaping and provider termination independent of TTL.
 - Enable point-in-time recovery and scheduled backups according to the
   environment retention policy.
