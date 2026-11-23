@@ -91,7 +91,7 @@ resource "aws_cloudwatch_dashboard" "controller" {
           title   = "Controller metrics"
           view    = "timeSeries"
           stacked = false
-          region  = data.aws_region.current.name
+          region  = local.region
           period  = 60
           stat    = "Sum"
           metrics = local.alarm_metrics
@@ -102,3 +102,10 @@ resource "aws_cloudwatch_dashboard" "controller" {
 }
 
 data "aws_region" "current" {}
+
+locals {
+  # `name` is the provider v5 attribute and `region` the v6 one. Naming either
+  # one directly fails validation (v5) or warns as deprecated (v6), so the
+  # attribute is chosen by key and only that one is read.
+  region = data.aws_region.current[contains(keys(data.aws_region.current), "region") ? "region" : "name"]
+}

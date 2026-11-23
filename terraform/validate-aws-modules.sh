@@ -3,16 +3,42 @@
 # composition. Makes no AWS calls and needs no credentials: tests use a mocked
 # AWS provider. `terraform init` downloads the provider plugin from the public
 # registry; pass --skip-init to run only the static checks.
+#
+# The modules declare AWS provider ">= 5.0, < 7.0". Pass
+# --provider-version <x.y.z> to run every check against exactly that provider
+# release (in a temporary copy), so both ends of the range can be verified:
+#   terraform/validate-aws-modules.sh --provider-version 5.100.0
+#   terraform/validate-aws-modules.sh --provider-version 6.73.0
 set -euo pipefail
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 skip_init=false
-for arg in "$@"; do
-  case "$arg" in
+provider_version=
+while [ $# -gt 0 ]; do
+  case "$1" in
     --skip-init) skip_init=true ;;
-    *) printf 'unknown argument: %s\n' "$arg" >&2; exit 2 ;;
+    --provider-version)
+      [ $# -ge 2 ] || { echo '--provider-version needs a value' >&2; exit 2; }
+      provider_version=$2; shift ;;
+    *) printf 'unknown argument: %s\n' "$1" >&2; exit 2 ;;
   esac
+  shift
 done
+
+if [ -n "$provider_version" ]; then
+  [[ "$provider_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'provider version must look like 5.100.0' >&2; exit 2; }
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  tar -C "$root" --exclude=.terraform -cf - . | tar -C "$tmp" -xf -
+  find "$tmp" -name '*.tf' -exec sed -i.bak "s/version *= *\">= 5.0, < 7.0\"/version = \"= $provider_version\"/" {} +
+  find "$tmp" -name '*.bak' -delete
+  find "$tmp" -name .terraform.lock.hcl -delete
+  printf 'running against AWS provider %s\n' "$provider_version"
+  args=()
+  [ "$skip_init" = true ] && args+=(--skip-init)
+  "$tmp/validate-aws-modules.sh" ${args[@]+"${args[@]}"}
+  exit $?
+fi
 
 modules=(aws-ecs-controller aws-shared-gateway aws-ephemeral-runner)
 dirs=()
@@ -62,6 +88,13 @@ fi
 for d in "${dirs[@]}"; do
   printf '== %s\n' "${d#"$root"/}"
   (cd "$d" && terraform init -backend=false -input=false >/dev/null && terraform validate && terraform test)
+done
+
+# Modules that read the provider's region attribute, which differs between
+# provider major versions. Validation alone is enough to catch a regression.
+for m in runner-network observability; do
+  printf '== modules/%s\n' "$m"
+  (cd "$root/modules/$m" && terraform init -backend=false -input=false >/dev/null && terraform validate)
 done
 
 echo 'aws module validation passed'

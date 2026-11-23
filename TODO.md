@@ -33,6 +33,7 @@ first as the target experience, then the gaps they expose are built.
 - [ ] 2.1b Move JIT to the organization-level endpoint (`POST /orgs/{org}/actions/runners/generate-jitconfig`) so the App needs the narrower organization Self-hosted runners permission instead of repository Administration.
 - [ ] 2.1c Serve several App installations from one controller (installation ID per event, allowlisted).
 - [ ] 2.1d Apply `GITHUB_JIT_REQUEST_TIMEOUT`, `GITHUB_REGISTRATION_TIMEOUT` and `GITHUB_REGISTRATION_POLL_INTERVAL` in the executable (currently validated but unused).
+- [x] 2.2h Modules validate on AWS provider v5 and v6 (region read by key; `validate-aws-modules.sh --provider-version`). Found by a customer composition on v5.
 - [ ] 2.2c Runner layer: launch template, runner IAM role and instance profile, runner network, behind the `aws-ephemeral-runner` contract.
 - [ ] 2.2d Publish an official controller image (digest list per release).
 - [ ] 2.2e Wire multi-replica coordination into the executable, then relax `desired_count`.
