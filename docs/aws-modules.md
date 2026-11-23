@@ -19,12 +19,30 @@ provider, CI system, or add-on service.
 | `aws-ecs-controller` | `terraform/modules/aws-ecs-controller` | ECR, logs, DynamoDB state, secret containers, roles, security group, target group, listener rule, Fargate service, in two gated phases |
 | `aws-shared-gateway` | `terraform/modules/aws-shared-gateway` | adopts an existing ALB and certificate; optional HTTPS listener with a fixed default response, optional HTTP redirect, ALB security-group ingress |
 | `aws-ephemeral-runner` | `terraform/modules/aws-ephemeral-runner` | contract only (no resources): launch template, IMDSv2, encrypted gp3, ownership tags, lifetime, PassRole scope, request-scoped cleanup |
+| `aws-runner-layer` | `terraform/modules/aws-runner-layer` | implements that contract: launch template (no public IP, no user data), runner IAM role and instance profile (no permissions to start), optional ingress-free security group; outputs a ready-made `runner` object for `aws-ecs-controller`. Not yet run on real EC2 |
 
 `aws-ecs-controller` reuses `terraform/modules/controller-state` for the
 DynamoDB table so the state schema has one definition. Consume the modules
 through a Git source that includes the whole repository package (the
 `//terraform/modules/...` form below) so the relative sibling reference
 resolves.
+
+## Enabling runners
+
+1. Deploy the controller with `runner` disabled (the default) and prove the
+   webhook path first.
+2. Create the layer with `aws-runner-layer`, passing your AMI, subnet, VPC and
+   egress ranges. Nothing is assumed.
+3. Pass `merge(module.runner_layer.controller_runner, { labels = [...] })` as the
+   controller's `runner`, and add `iam:PassRole` on exactly
+   `module.runner_layer.role_arn` to the reviewed task policy.
+4. Keep `max_runners` at its default of 1 until the first job and its cleanup
+   are proven.
+
+The controller module rejects an enabled runner without user data (the
+bootstrap, with its JIT placeholder), a launch template, the role and profile,
+GitHub JIT, and a task policy that passes exactly the runner role. The layer's
+inputs, outputs and limits are in its README.
 
 A worked composition with placeholder values is in
 `terraform/examples/aws-customer`. A foundation-layer environment (image

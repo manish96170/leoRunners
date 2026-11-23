@@ -156,6 +156,10 @@ locals {
     AWS_SECURITY_GROUP_IDS          = join(",", var.runner.security_group_ids)
     AWS_RUNNER_INSTANCE_PROFILE_ARN = var.runner.instance_profile_arn != null ? var.runner.instance_profile_arn : ""
     CAPACITY_LABELS                 = join(",", var.runner.labels)
+    CAPACITY_MAX_RUNNERS            = tostring(var.runner.max_runners)
+    RUNNER_MAX_LIFETIME             = "${var.runner.max_lifetime_minutes}m"
+    RUNNER_USER_DATA                = var.runner.user_data != null ? var.runner.user_data : ""
+    AWS_RUNNER_TAGS                 = join(",", [for k in sort(keys(var.runner.tags)) : "${k}=${var.runner.tags[k]}"])
   } : {}
 
   environment = {
@@ -318,6 +322,11 @@ resource "terraform_data" "guard" {
     precondition {
       condition     = !var.runner.enabled || (var.runner.launch_template_id != null && var.runner.role_arn != null && var.runner.instance_profile_arn != null)
       error_message = "runner.enabled requires runner.launch_template_id, runner.role_arn, and runner.instance_profile_arn."
+    }
+
+    precondition {
+      condition     = !var.runner.enabled || var.runner.user_data != null
+      error_message = "runner.enabled requires runner.user_data (the bootstrap script with the {{GITHUB_JIT_CONFIG_B64}} placeholder)."
     }
 
     precondition {

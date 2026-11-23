@@ -139,6 +139,9 @@ type ProviderConfig struct {
 	Name ProviderName
 	AWS  AWSConfig
 	GCP  GCPConfig
+	// RunnerMaxLifetime is the hard lifetime stamped on every runner as its
+	// expiry. The reaper terminates anything past it.
+	RunnerMaxLifetime time.Duration
 }
 
 type AWSConfig struct {
@@ -153,6 +156,10 @@ type AWSConfig struct {
 	InstanceProfileName   string
 	UserData              string
 	UserDataFile          string
+	// Tags are extra tags stamped on every runner instance (AWS_RUNNER_TAGS,
+	// "key=value,key=value"). The reaper backstop only considers instances that
+	// carry all of them, so deployments sharing an account stay apart.
+	Tags map[string]string
 }
 
 type GCPConfig struct {
@@ -269,7 +276,7 @@ func Defaults() Config {
 		Webhook:        WebhookConfig{MaxBodyBytes: 2 << 20, Workers: 16, QueueSize: 1024, EventTimeout: 30 * time.Minute},
 		State:          StateConfig{Backend: "memory", StateIndexName: "gsi1", ExpiryIndexName: "gsi2"},
 		Reconciliation: ReconciliationConfig{Interval: 30 * time.Second, OperationTimeout: 30 * time.Second, MaxRecords: 1000},
-		Provider:       ProviderConfig{Name: ProviderFake, AWS: AWSConfig{Region: "us-east-1"}, GCP: GCPConfig{Zone: "us-central1-a", NamePrefix: "leo-runner"}},
+		Provider:       ProviderConfig{Name: ProviderFake, AWS: AWSConfig{Region: "us-east-1"}, GCP: GCPConfig{Zone: "us-central1-a", NamePrefix: "leo-runner"}, RunnerMaxLifetime: 2 * time.Hour},
 		Capacity:       CapacityConfig{Mode: CapacityFallback, PoolID: "configured", Ownership: "managed", Provider: "fake", MaxRunners: 100, SecurityProfile: "isolated"},
 		GitHubJIT:      GitHubJITConfig{APIBaseURL: "https://api.github.com", RequestTimeout: 30 * time.Second, RegistrationTimeout: 10 * time.Minute, PollInterval: 5 * time.Second},
 		AI:             AIConfig{Provider: "disabled", Timeout: 5 * time.Second, MaxLogBytes: 64 * 1024},
@@ -360,6 +367,14 @@ func LoadFrom(env map[string]string) (Config, error) {
 	c.Provider.AWS.InstanceProfileName = get("AWS_RUNNER_INSTANCE_PROFILE_NAME")
 	c.Provider.AWS.UserData = env["RUNNER_USER_DATA"]
 	c.Provider.AWS.UserDataFile = get("RUNNER_USER_DATA_FILE")
+	if raw := get("AWS_RUNNER_TAGS"); raw != "" {
+		if c.Provider.AWS.Tags, err = parseRunnerTags(raw); err != nil {
+			return c, fmt.Errorf("%w: AWS_RUNNER_TAGS: %v", ErrInvalid, err)
+		}
+	}
+	if c.Provider.RunnerMaxLifetime, err = optionalDuration(env, "RUNNER_MAX_LIFETIME", c.Provider.RunnerMaxLifetime); err != nil {
+		return c, err
+	}
 
 	c.Provider.GCP.Project = get("GCP_PROJECT")
 	c.Provider.GCP.Zone = getOr(env, "GCP_ZONE", c.Provider.GCP.Zone)
@@ -503,6 +518,9 @@ func (c Config) Validate() error {
 		}
 	default:
 		problems = append(problems, "provider must be fake, aws, or gcp")
+	}
+	if lifetime := c.Provider.RunnerMaxLifetime; lifetime != 0 && (lifetime < 5*time.Minute || lifetime > 24*time.Hour) {
+		problems = append(problems, "RUNNER_MAX_LIFETIME must be between 5m and 24h")
 	}
 	if c.Capacity.Mode != CapacityCustomerFirst && c.Capacity.Mode != CapacityManagedFirst && c.Capacity.Mode != CapacityCustomerOnly && c.Capacity.Mode != CapacityManagedOnly && c.Capacity.Mode != CapacityFallback {
 		problems = append(problems, "capacity mode is invalid")
@@ -706,6 +724,39 @@ func parseTokenPermissions(value string) (map[string]string, error) {
 	}
 	if len(out) > 64 {
 		return nil, fmt.Errorf("too many permissions (max 64)")
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
+}
+
+// parseRunnerTags parses "key=value,key=value" into instance tags. It rejects
+// the reserved leo-runners: and aws: prefixes (the first is how the reaper
+// identifies owned instances), duplicates, and values EC2 would refuse.
+func parseRunnerTags(value string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		key, val, ok := strings.Cut(item, "=")
+		key, val = strings.TrimSpace(key), strings.TrimSpace(val)
+		if !ok || key == "" || val == "" || len(key) > 128 || len(val) > 256 || strings.ContainsAny(key+val, "\r\n") {
+			return nil, fmt.Errorf("%q must be key=value with a non-empty key and value", item)
+		}
+		lower := strings.ToLower(key)
+		if strings.HasPrefix(lower, "leo-runners:") || strings.HasPrefix(lower, "aws:") {
+			return nil, fmt.Errorf("tag key %q uses a reserved prefix", key)
+		}
+		if _, dup := out[key]; dup {
+			return nil, fmt.Errorf("duplicate tag %q", key)
+		}
+		out[key] = val
+	}
+	if len(out) > 40 {
+		return nil, fmt.Errorf("too many tags (max 40)")
 	}
 	if len(out) == 0 {
 		return nil, nil

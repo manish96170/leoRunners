@@ -44,7 +44,7 @@ func main() {
 		log.Fatal(err)
 	}
 	repository := configureRepository()
-	provider := configureProvider(repository)
+	provider := configureProvider(repository, runtime.Provider.AWS.Tags)
 	poolRegistry := configureCapacityRegistry()
 	sink := &telemetry.MemorySink{}
 	metrics := prometheus.New(prometheus.Config{Namespace: "leo_runner", AllowedLabels: map[string]struct{}{"event": {}, "provider": {}, "extension": {}, "region": {}, "outcome": {}}})
@@ -75,7 +75,7 @@ func main() {
 	}
 	serviceSink := &telemetryFanout{sinks: sinks}
 	_ = metrics.IncCounter("controller_up", nil)
-	service := &controller.Service{State: repository, Provider: provider, Sink: serviceSink, JobTTL: 2 * time.Hour, RunnerNamePrefix: envOrDefault("RUNNER_NAME_PREFIX", "leo-runner"), CapacityRegistry: poolRegistry}
+	service := &controller.Service{State: repository, Provider: provider, Sink: serviceSink, JobTTL: runnerLifetime(runtime.Provider.RunnerMaxLifetime), RunnerNamePrefix: envOrDefault("RUNNER_NAME_PREFIX", "leo-runner"), CapacityRegistry: poolRegistry}
 	providerKey := envOrDefault("CAPACITY_PROVIDER", "fake")
 	if providerKey == "fake" {
 		if strings.TrimSpace(os.Getenv("AWS_LAUNCH_TEMPLATE_ID")) != "" || strings.TrimSpace(os.Getenv("AWS_LAUNCH_TEMPLATE_NAME")) != "" {
@@ -238,7 +238,7 @@ func configureRepository() state.Repository {
 	return state.NewMemoryRepository()
 }
 
-func configureProvider(repository state.Repository) providers.Provider {
+func configureProvider(repository state.Repository, runnerTags map[string]string) providers.Provider {
 	region := envOrDefault("AWS_REGION", "us-east-1")
 	templateID := strings.TrimSpace(os.Getenv("AWS_LAUNCH_TEMPLATE_ID"))
 	templateName := strings.TrimSpace(os.Getenv("AWS_LAUNCH_TEMPLATE_NAME"))
@@ -268,7 +268,7 @@ func configureProvider(repository state.Repository) providers.Provider {
 		}
 		userData = string(raw)
 	}
-	provider, err := awsprovider.New(ec2.NewFromConfig(cfg), awsprovider.Config{Region: region, LaunchTemplateID: templateID, LaunchTemplateName: templateName, LaunchTemplateVersion: os.Getenv("AWS_LAUNCH_TEMPLATE_VERSION"), SubnetID: os.Getenv("AWS_SUBNET_ID"), SecurityGroupIDs: splitCSV(os.Getenv("AWS_SECURITY_GROUP_IDS")), InstanceProfileARN: os.Getenv("AWS_RUNNER_INSTANCE_PROFILE_ARN"), InstanceProfileName: os.Getenv("AWS_RUNNER_INSTANCE_PROFILE_NAME"), UserData: userData})
+	provider, err := awsprovider.New(ec2.NewFromConfig(cfg), awsprovider.Config{Region: region, LaunchTemplateID: templateID, LaunchTemplateName: templateName, LaunchTemplateVersion: os.Getenv("AWS_LAUNCH_TEMPLATE_VERSION"), SubnetID: os.Getenv("AWS_SUBNET_ID"), SecurityGroupIDs: splitCSV(os.Getenv("AWS_SECURITY_GROUP_IDS")), InstanceProfileARN: os.Getenv("AWS_RUNNER_INSTANCE_PROFILE_ARN"), InstanceProfileName: os.Getenv("AWS_RUNNER_INSTANCE_PROFILE_NAME"), UserData: userData, Tags: runnerTags})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -323,6 +323,15 @@ func configureGitHubAssignment(service *controller.Service, repository state.Rep
 	}
 	service.ScopePolicy = &scope
 	service.Assignment = &runners.Service{State: repository, Provider: provider, JIT: controller.GitHubJITAdapter{Client: client, Organization: orgScope}, Registration: controller.GitHubRegistrationAdapter{Verifier: verifier, Organization: orgScope}, RunnerGroupID: &groupID, Policy: runners.AssignmentPolicy{Organizations: append([]string(nil), scope.Organizations...), Repositories: append([]string(nil), scope.Repositories...), AllowedLabels: append([]string(nil), scope.AllowedLabels...), RunnerGroupID: groupID, AllowForks: scope.AllowForks}}
+}
+
+// runnerLifetime is the configured hard runner lifetime, or the default when
+// none was set (a Config built without Defaults).
+func runnerLifetime(configured time.Duration) time.Duration {
+	if configured <= 0 {
+		return 2 * time.Hour
+	}
+	return configured
 }
 
 func envOrDefault(name, fallback string) string {

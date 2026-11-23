@@ -568,9 +568,18 @@ variable "github" {
 variable "runner" {
   description = <<-EOT
     Ephemeral EC2 runner lifecycle settings. Disabled by default; the module
-    never creates runner infrastructure. Enabling it requires the dedicated
-    runner role and instance profile ARNs, a launch template, GitHub JIT, and a
-    reviewed task policy that scopes iam:PassRole to exactly runner.role_arn.
+    never creates runner infrastructure (the aws-runner-layer module does).
+    Enabling it requires the dedicated runner role and instance profile ARNs,
+    a launch template, user data, GitHub JIT, and a reviewed task policy that
+    scopes iam:PassRole to exactly runner.role_arn.
+
+    user_data is the runner bootstrap script and must contain the
+    {{GITHUB_JIT_CONFIG_B64}} placeholder exactly once. max_lifetime_minutes is
+    the hard runner lifetime the reaper enforces. max_runners caps concurrent
+    runners and defaults to 1 so a first validation cannot fan out. tags are
+    extra instance tags (also required to match by the reaper backstop). Leave
+    subnet_id and security_group_ids null when the launch template defines its
+    own network interface: EC2 refuses both.
   EOT
   type = object({
     enabled                 = optional(bool, false)
@@ -583,8 +592,40 @@ variable "runner" {
     instance_type           = optional(string)
     pool_id                 = optional(string, "default")
     labels                  = optional(list(string), [])
+    user_data               = optional(string)
+    max_lifetime_minutes    = optional(number, 120)
+    max_runners             = optional(number, 1)
+    tags                    = optional(map(string), {})
   })
   default = {}
+
+  validation {
+    condition     = var.runner.user_data == null || length(split("{{GITHUB_JIT_CONFIG_B64}}", var.runner.user_data)) == 2
+    error_message = "runner.user_data must contain the {{GITHUB_JIT_CONFIG_B64}} placeholder exactly once; the controller replaces it with the one-time JIT configuration."
+  }
+
+  validation {
+    condition     = var.runner.user_data == null || length(var.runner.user_data) <= 12000
+    error_message = "runner.user_data must be at most 12000 characters (EC2 allows 16 KB before encoding)."
+  }
+
+  validation {
+    condition     = var.runner.max_lifetime_minutes >= 5 && var.runner.max_lifetime_minutes <= 1440
+    error_message = "runner.max_lifetime_minutes must be between 5 and 1440."
+  }
+
+  validation {
+    condition     = var.runner.max_runners >= 1 && var.runner.max_runners <= 1000
+    error_message = "runner.max_runners must be between 1 and 1000."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.runner.tags :
+      !startswith(lower(k), "leo-runners:") && !startswith(lower(k), "aws:") && length(k) <= 128 && length(v) >= 1 && length(v) <= 256 && !strcontains(k, ",") && !strcontains(k, "=") && !strcontains(v, ",")
+    ])
+    error_message = "runner.tags keys must not use the reserved leo-runners: or aws: prefixes, keys and values must be non-empty, and neither may contain a comma (keys may not contain an equals sign either)."
+  }
 
   validation {
     condition     = var.runner.role_arn == null || can(regex("^arn:[^:]+:iam::[0-9]{12}:role/.+$", var.runner.role_arn))

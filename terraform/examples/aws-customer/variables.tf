@@ -96,6 +96,7 @@ variable "github" {
     allowed_labels        = optional(list(string), [])
     allow_forks           = optional(bool, false)
     api_base_url          = optional(string)
+    runner_scope          = optional(string, "repository")
     app = optional(object({
       app_id            = string
       installation_id   = number
@@ -103,4 +104,19 @@ variable "github" {
     }))
   })
   default = {}
+}
+
+variable "runner_layer" {
+  description = "Optional runner layer. Null (the default) creates no runner infrastructure and keeps the runner lifecycle off. Requires github.jit_enabled and a task_role_policy_json; the PassRole statement for the runner role is added for you."
+  type = object({
+    ami_id                   = string
+    instance_type            = string
+    vpc_id                   = string
+    subnet_id                = string
+    egress_https_cidr_blocks = list(string)
+    labels                   = list(string)
+    request_id               = optional(string)
+    cleanup_deadline         = optional(string)
+  })
+  default = null
 }

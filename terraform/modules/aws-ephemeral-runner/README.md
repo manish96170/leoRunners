@@ -10,7 +10,7 @@ agree before anything launches. Every value is supplied as a variable.
 - IMDSv2 required (`http_tokens = required`, hop limit 1, instance metadata tags off)
 - encrypted gp3 root volume, deleted on termination
 - no public IP, `instance_initiated_shutdown_behavior = terminate`
-- ownership tags `Platform=ci-runner` and `ManagedBy=leo-runners` that callers cannot override (they match the AWS provider in `controller/internal/providers/aws`)
+- the ownership tag `leo-runners:managed-by=leo-runners`, the exact key the AWS provider in `controller/internal/providers/aws` stamps on every instance and that its reaper and a reviewed IAM policy select on. Callers cannot use the `leo-runners:` prefix.
 
 ## Inputs
 
@@ -26,8 +26,9 @@ agree before anything launches. Every value is supplied as a variable.
 
 Validation rejects: wildcard role ARNs, a runner role identical to the
 controller role, roles and profile in different accounts, malformed AMI,
-subnet, and security-group IDs, and any attempt to override `Platform` or
-`ManagedBy`.
+subnet, and security-group IDs, and any tag under the reserved `leo-runners:`
+prefix. `controller_role_arn` is optional so the layer can be created before the
+controller; without it the pass-role constraint names no principal.
 
 ## Outputs (the contract)
 
@@ -37,7 +38,7 @@ subnet, and security-group IDs, and any attempt to override `Platform` or
 | `ownership_tags` | tags for runner instances and volumes |
 | `max_lifetime_minutes` | lifetime enforced through `ExpiresAt` and the reaper |
 | `controller_policy_constraints` | the review checklist for the controller policy: `iam:PassRole` limited to exactly the runner role and `ec2.amazonaws.com`; `ec2:RunInstances` requires the ownership request tags and is limited to the listed AMI, subnets, and security groups; terminate and describe require the ownership resource tags |
-| `cleanup_selector` | the tag intersection (`Platform`, `ManagedBy`, `RequestId`) that identifies exactly one request's runners; null when `request_id` is unset |
+| `cleanup_selector` | the tag intersection (`leo-runners:managed-by`, `RequestId`) that identifies exactly one request's runners; null when `request_id` is unset |
 
 ## Request-scoped cleanup
 
@@ -51,8 +52,8 @@ request-scoped cleanup is available. See `docs/aws-rollback-and-cleanup.md`.
 `aws-ecs-controller` accepts a `runner` object that stays disabled by default.
 It will not enable the lifecycle unless the dedicated role and instance profile
 ARNs, a launch template ID, GitHub JIT, and a controller policy whose
-`iam:PassRole` names exactly the runner role are all present. A future module
-version will add the launch template and runner IAM resources behind these same
-inputs.
+`iam:PassRole` names exactly the runner role are all present. The
+`aws-runner-layer` module implements this contract: it creates the launch
+template, runner role and instance profile, and an ingress-free security group.
 
 Offline tests: `terraform init -backend=false && terraform test` (no provider needed).

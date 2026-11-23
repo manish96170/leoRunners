@@ -1,10 +1,10 @@
 output "ownership_tags" {
-  description = "Tags every runner instance and volume must carry. The controller adds per-job tags (repository, job, runner, CreatedAt, ExpiresAt) at launch."
+  description = "Tags every runner instance and volume must carry. The controller adds per-job tags under the leo-runners: prefix (runner-id, job-id, repository, created-at, expires-at, and so on) at launch."
   value       = local.ownership_tags
 
   precondition {
-    condition     = !contains(keys(var.tags), "Platform") && !contains(keys(var.tags), "ManagedBy")
-    error_message = "tags must not set Platform or ManagedBy; the contract fixes them."
+    condition     = !anytrue([for k in keys(var.tags) : startswith(k, "leo-runners:")])
+    error_message = "tags must not use the reserved leo-runners: prefix; the controller sets those keys."
   }
 }
 
@@ -42,7 +42,7 @@ output "launch_template_spec" {
   }
 
   precondition {
-    condition     = var.runner_role_arn != var.controller_role_arn
+    condition     = var.controller_role_arn == null || var.runner_role_arn != var.controller_role_arn
     error_message = "runner_role_arn must be a dedicated role, different from controller_role_arn."
   }
 
@@ -69,21 +69,15 @@ output "controller_policy_constraints" {
       }
     }
     run_instances = {
-      action = "ec2:RunInstances"
-      required_request_tags = {
-        Platform  = local.fixed_tags.Platform
-        ManagedBy = local.fixed_tags.ManagedBy
-      }
+      action                     = "ec2:RunInstances"
+      required_request_tags      = local.fixed_tags
       allowed_subnet_ids         = var.subnet_ids
       allowed_security_group_ids = var.security_group_ids
       allowed_image_id           = var.ami_id
     }
     terminate_and_describe = {
-      actions = ["ec2:TerminateInstances", "ec2:DescribeInstances"]
-      required_resource_tags = {
-        Platform  = local.fixed_tags.Platform
-        ManagedBy = local.fixed_tags.ManagedBy
-      }
+      actions                = ["ec2:TerminateInstances", "ec2:DescribeInstances"]
+      required_resource_tags = local.fixed_tags
     }
     forbidden = [
       "iam:PassRole with a wildcard or role-prefix resource",
@@ -96,11 +90,7 @@ output "controller_policy_constraints" {
 output "cleanup_selector" {
   description = "Tag intersection that identifies exactly the runners belonging to this request. Null when request_id is unset, in which case request-scoped cleanup is not available and nothing may be selected by name, VPC, subnet, or instance type."
   value = var.request_id == null ? null : {
-    required_tags = {
-      Platform  = local.fixed_tags.Platform
-      ManagedBy = local.fixed_tags.ManagedBy
-      RequestId = var.request_id
-    }
-    match = "all tags must match; never discover by name, VPC, subnet, or instance type"
+    required_tags = merge(local.fixed_tags, { RequestId = var.request_id })
+    match         = "all tags must match; never discover by name, VPC, subnet, or instance type"
   }
 }

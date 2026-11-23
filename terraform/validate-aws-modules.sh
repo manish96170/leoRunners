@@ -29,18 +29,22 @@ if [ -n "$provider_version" ]; then
   [[ "$provider_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'provider version must look like 5.100.0' >&2; exit 2; }
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
-  tar -C "$root" --exclude=.terraform -cf - . | tar -C "$tmp" -xf -
-  find "$tmp" -name '*.tf' -exec sed -i.bak "s/version *= *\">= 5.0, < 7.0\"/version = \"= $provider_version\"/" {} +
-  find "$tmp" -name '*.bak' -delete
-  find "$tmp" -name .terraform.lock.hcl -delete
+  # Keep the repository layout: the runner layer reads the bundled bootstrap
+  # script from outside terraform/, as it does when consumed from a Git source.
+  mkdir -p "$tmp/terraform" "$tmp/bootstrap/runner"
+  tar -C "$root" --exclude=.terraform -cf - . | tar -C "$tmp/terraform" -xf -
+  cp "$root/../bootstrap/runner/user-data.sh" "$tmp/bootstrap/runner/user-data.sh"
+  find "$tmp/terraform" -name '*.tf' -exec sed -i.bak "s/version *= *\">= 5.0, < 7.0\"/version = \"= $provider_version\"/" {} +
+  find "$tmp/terraform" -name '*.bak' -delete
+  find "$tmp/terraform" -name .terraform.lock.hcl -delete
   printf 'running against AWS provider %s\n' "$provider_version"
   args=()
   [ "$skip_init" = true ] && args+=(--skip-init)
-  "$tmp/validate-aws-modules.sh" ${args[@]+"${args[@]}"}
+  "$tmp/terraform/validate-aws-modules.sh" ${args[@]+"${args[@]}"}
   exit $?
 fi
 
-modules=(aws-ecs-controller aws-shared-gateway aws-ephemeral-runner)
+modules=(aws-ecs-controller aws-shared-gateway aws-ephemeral-runner aws-runner-layer)
 dirs=()
 for m in "${modules[@]}"; do dirs+=("$root/modules/$m"); done
 dirs+=("$root/examples/aws-customer" "$root/environments/aws-foundation")
@@ -53,7 +57,7 @@ for m in "${modules[@]}"; do
   ls "$root/modules/$m"/tests/*.tftest.hcl >/dev/null 2>&1 || { printf 'missing tests: modules/%s/tests\n' "$m" >&2; exit 2; }
 done
 
-scan_paths=("$root/modules/aws-ecs-controller" "$root/modules/aws-shared-gateway" "$root/modules/aws-ephemeral-runner" "$root/examples" "$root/environments/aws-foundation")
+scan_paths=("$root/modules/aws-ecs-controller" "$root/modules/aws-shared-gateway" "$root/modules/aws-ephemeral-runner" "$root/modules/aws-runner-layer" "$root/examples" "$root/environments/aws-foundation")
 
 if grep -rEn --exclude-dir=.terraform '(AKIA[0-9A-Z]{16}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,})' "${scan_paths[@]}"; then
   echo 'credential-like material found' >&2
@@ -78,7 +82,7 @@ fi
 
 command -v terraform >/dev/null 2>&1 || { echo 'terraform not installed; static checks passed, skipped terraform checks' >&2; exit 0; }
 
-terraform fmt -check -recursive "$root/modules/aws-ecs-controller" "$root/modules/aws-shared-gateway" "$root/modules/aws-ephemeral-runner" "$root/examples" "$root/environments/aws-foundation"
+terraform fmt -check -recursive "$root/modules/aws-ecs-controller" "$root/modules/aws-shared-gateway" "$root/modules/aws-ephemeral-runner" "$root/modules/aws-runner-layer" "$root/examples" "$root/environments/aws-foundation"
 
 if [[ "$skip_init" == "true" ]]; then
   echo 'static checks passed (init, validate, and tests skipped)'

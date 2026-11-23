@@ -9,10 +9,11 @@ recommended convention is:
 Environment=<name>   Owner=<team>   RequestId=<approved request ID>   CleanupDeadline=<UTC timestamp>
 ```
 
-Runner instances additionally carry the fixed contract tags
-`Platform=ci-runner` and `ManagedBy=leo-runners` (and per-job tags added by the
-controller). The `aws-ephemeral-runner` module publishes the exact tag
-intersection as `cleanup_selector`.
+Runner instances additionally carry the ownership tag
+`leo-runners:managed-by=leo-runners`, plus per-job tags under the same prefix
+added by the controller. The `aws-ephemeral-runner` contract and the
+`aws-runner-layer` module publish the exact tag intersection as
+`cleanup_selector`.
 
 ## Rolling back the controller
 
@@ -38,8 +39,7 @@ subnet, or instance type:
 
 ```sh
 aws ec2 describe-instances \
-  --filters Name=tag:Platform,Values=ci-runner \
-            Name=tag:ManagedBy,Values=leo-runners \
+  --filters Name=tag:leo-runners:managed-by,Values=leo-runners \
             Name=tag:RequestId,Values="$REQUEST_ID" \
             Name=instance-state-name,Values=pending,running,stopping,stopped \
   --query 'Reservations[].Instances[].InstanceId' --output text

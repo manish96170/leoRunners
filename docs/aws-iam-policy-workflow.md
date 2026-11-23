@@ -53,7 +53,7 @@ ARNs, runner role) and, once the runner layer is planned,
 
 - **DynamoDB:** scope to the table ARN and the two index ARNs only. Remove replication actions.
 - **`iam:PassRole`:** Resource is exactly the dedicated runner role ARN, with `iam:PassedToService = ec2.amazonaws.com`. No wildcard or role prefix.
-- **`ec2:RunInstances`:** list the resource types it acts on (instance, volume, network interface, launch template, image, subnet, security group), restrict to the approved launch template, AMI, subnets and security groups, and require the ownership request tags (`Platform=ci-runner`, `ManagedBy=leo-runners`).
+- **`ec2:RunInstances`:** list the resource types it acts on (instance, volume, network interface, launch template, image, subnet, security group), restrict to the approved launch template, AMI, subnets and security groups, and require the ownership request tag (`leo-runners:managed-by=leo-runners`).
 - **`ec2:CreateTags`:** only `ec2:CreateAction = RunInstances`.
 - **`ec2:TerminateInstances`:** only resources carrying the ownership tags (and the request tag when you use one).
 - **`ec2:DescribeInstances`:** does not support resource-level scoping; `*` is acceptable for this read-only action.

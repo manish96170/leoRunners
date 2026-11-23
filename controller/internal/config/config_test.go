@@ -428,3 +428,39 @@ func TestRunnerScopeRejectsUnknownValuesAndStaleSettings(t *testing.T) {
 		t.Fatal("an organization scope with JIT disabled must be rejected, like other stale JIT settings")
 	}
 }
+
+func TestRunnerLifetimeDefaultsAndIsBounded(t *testing.T) {
+	c, err := LoadFrom(validEnv())
+	if err != nil || c.Provider.RunnerMaxLifetime != 2*time.Hour {
+		t.Fatalf("default lifetime = %s, error = %v", c.Provider.RunnerMaxLifetime, err)
+	}
+	env := validEnv()
+	env["RUNNER_MAX_LIFETIME"] = "90m"
+	if c, err = LoadFrom(env); err != nil || c.Provider.RunnerMaxLifetime != 90*time.Minute {
+		t.Fatalf("lifetime = %s, error = %v", c.Provider.RunnerMaxLifetime, err)
+	}
+	for _, bad := range []string{"1m", "25h", "0s", "-5m", "soon"} {
+		env["RUNNER_MAX_LIFETIME"] = bad
+		if _, err := LoadFrom(env); err == nil {
+			t.Errorf("RUNNER_MAX_LIFETIME=%q must be rejected", bad)
+		}
+	}
+}
+
+func TestRunnerTagsParseAndRejectReservedOrMalformed(t *testing.T) {
+	env := validEnv()
+	env["AWS_RUNNER_TAGS"] = "RequestId=req-1, Environment=test"
+	c, err := LoadFrom(env)
+	if err != nil || len(c.Provider.AWS.Tags) != 2 || c.Provider.AWS.Tags["RequestId"] != "req-1" || c.Provider.AWS.Tags["Environment"] != "test" {
+		t.Fatalf("tags = %v, error = %v", c.Provider.AWS.Tags, err)
+	}
+	for _, bad := range []string{"leo-runners:managed-by=x", "LEO-RUNNERS:x=y", "aws:cloudformation:stack=x", "novalue", "k=", "=v", "a=1,a=2"} {
+		env["AWS_RUNNER_TAGS"] = bad
+		if _, err := LoadFrom(env); err == nil {
+			t.Errorf("AWS_RUNNER_TAGS=%q must be rejected", bad)
+		}
+	}
+	if c, err = LoadFrom(validEnv()); err != nil || c.Provider.AWS.Tags != nil {
+		t.Fatalf("no tags configured: tags = %v, error = %v", c.Provider.AWS.Tags, err)
+	}
+}

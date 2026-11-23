@@ -48,7 +48,7 @@ run "request_scoped_cleanup_selector" {
 
   assert {
     condition     = output.cleanup_selector.required_tags.RequestId == "change-1234" && output.ownership_tags.CleanupDeadline == "2030-01-01T00:00:00Z"
-    error_message = "The cleanup selector must be the Platform, ManagedBy, and RequestId intersection."
+    error_message = "The cleanup selector must be the ownership tag and RequestId intersection."
   }
 }
 
@@ -91,14 +91,36 @@ run "wildcard_runner_role_is_rejected" {
   expect_failures = [var.runner_role_arn]
 }
 
-run "platform_tag_cannot_be_overridden" {
+run "reserved_tag_prefix_cannot_be_used" {
   command = plan
 
   variables {
-    tags = { Platform = "something-else" }
+    tags = { "leo-runners:managed-by" = "something-else" }
   }
 
   expect_failures = [output.ownership_tags]
+}
+
+run "ownership_tag_matches_the_provider" {
+  command = plan
+
+  assert {
+    condition     = output.ownership_tags["leo-runners:managed-by"] == "leo-runners" && output.controller_policy_constraints.run_instances.required_request_tags["leo-runners:managed-by"] == "leo-runners"
+    error_message = "The contract must use the tag key the controller's AWS provider actually stamps."
+  }
+}
+
+run "controller_role_is_optional" {
+  command = plan
+
+  variables {
+    controller_role_arn = null
+  }
+
+  assert {
+    condition     = output.controller_policy_constraints.pass_role.principal == null && output.controller_policy_constraints.pass_role.resources[0] == var.runner_role_arn
+    error_message = "Without a controller role the constraint must still pin the runner role."
+  }
 }
 
 run "bad_ami_is_rejected" {
