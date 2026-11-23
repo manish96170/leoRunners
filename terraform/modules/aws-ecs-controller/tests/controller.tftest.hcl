@@ -416,6 +416,7 @@ run "runner_lifecycle_requires_scoped_passrole" {
       launch_template_id   = "lt-0123456789abcdef0"
       role_arn             = "arn:aws:iam::111122223333:role/example-runner"
       instance_profile_arn = "arn:aws:iam::111122223333:instance-profile/example-runner"
+      user_data            = "#!/bin/bash\nJIT={{GITHUB_JIT_CONFIG_B64}}\n"
     }
     task_role_policy_json = jsonencode({
       Version = "2012-10-17"
@@ -446,6 +447,7 @@ run "runner_lifecycle_with_scoped_passrole" {
       launch_template_id   = "lt-0123456789abcdef0"
       role_arn             = "arn:aws:iam::111122223333:role/example-runner"
       instance_profile_arn = "arn:aws:iam::111122223333:instance-profile/example-runner"
+      user_data            = "#!/bin/bash\nJIT={{GITHUB_JIT_CONFIG_B64}}\n"
     }
     task_role_policy_json = jsonencode({
       Version = "2012-10-17"
@@ -461,6 +463,16 @@ run "runner_lifecycle_with_scoped_passrole" {
   assert {
     condition     = output.container_environment["AWS_LAUNCH_TEMPLATE_ID"] == "lt-0123456789abcdef0" && output.container_environment["CAPACITY_PROVIDER"] == "aws"
     error_message = "Runner settings must reach the container when the lifecycle is enabled."
+  }
+
+  assert {
+    condition = (
+      output.container_environment["CAPACITY_MAX_RUNNERS"] == "1" &&
+      output.container_environment["RUNNER_MAX_LIFETIME"] == "120m" &&
+      strcontains(output.container_environment["RUNNER_USER_DATA"], "{{GITHUB_JIT_CONFIG_B64}}") &&
+      !contains(keys(output.container_environment), "AWS_RUNNER_TAGS")
+    )
+    error_message = "A first validation must default to one runner and a two hour lifetime, and carry the bootstrap script."
   }
 }
 
@@ -724,4 +736,115 @@ run "organization_scope_requires_jit" {
   }
 
   expect_failures = [var.github]
+}
+
+run "runner_limits_lifetime_and_tags_reach_the_container" {
+  command = plan
+
+  variables {
+    create_foundation = true
+    github = {
+      jit_enabled           = true
+      runner_group_id       = 1
+      allowed_organizations = ["example-org"]
+      allowed_labels        = ["self-hosted"]
+    }
+    runner = {
+      enabled              = true
+      launch_template_id   = "lt-0123456789abcdef0"
+      role_arn             = "arn:aws:iam::111122223333:role/example-runner"
+      instance_profile_arn = "arn:aws:iam::111122223333:instance-profile/example-runner"
+      user_data            = "#!/bin/bash\nJIT={{GITHUB_JIT_CONFIG_B64}}\n"
+      max_runners          = 4
+      max_lifetime_minutes = 45
+      tags                 = { RequestId = "req-1", Environment = "test" }
+    }
+    task_role_policy_json = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = ["arn:aws:iam::111122223333:role/example-runner"]
+      }]
+    })
+  }
+
+  assert {
+    condition = (
+      output.container_environment["CAPACITY_MAX_RUNNERS"] == "4" &&
+      output.container_environment["RUNNER_MAX_LIFETIME"] == "45m" &&
+      output.container_environment["AWS_RUNNER_TAGS"] == "Environment=test,RequestId=req-1"
+    )
+    error_message = "Runner cap, lifetime and sorted tags must reach the container."
+  }
+}
+
+run "runner_requires_user_data" {
+  command = plan
+
+  variables {
+    create_foundation = true
+    github = {
+      jit_enabled           = true
+      runner_group_id       = 1
+      allowed_organizations = ["example-org"]
+      allowed_labels        = ["self-hosted"]
+    }
+    runner = {
+      enabled              = true
+      launch_template_id   = "lt-0123456789abcdef0"
+      role_arn             = "arn:aws:iam::111122223333:role/example-runner"
+      instance_profile_arn = "arn:aws:iam::111122223333:instance-profile/example-runner"
+    }
+    task_role_policy_json = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = ["arn:aws:iam::111122223333:role/example-runner"]
+      }]
+    })
+  }
+
+  expect_failures = [terraform_data.guard]
+}
+
+run "user_data_without_placeholder_is_rejected" {
+  command = plan
+
+  variables {
+    runner = { user_data = "#!/bin/bash\necho hello\n" }
+  }
+
+  expect_failures = [var.runner]
+}
+
+run "user_data_with_two_placeholders_is_rejected" {
+  command = plan
+
+  variables {
+    runner = { user_data = "A={{GITHUB_JIT_CONFIG_B64}}\nB={{GITHUB_JIT_CONFIG_B64}}\n" }
+  }
+
+  expect_failures = [var.runner]
+}
+
+run "reserved_runner_tag_prefix_is_rejected" {
+  command = plan
+
+  variables {
+    runner = { tags = { "leo-runners:managed-by" = "x" } }
+  }
+
+  expect_failures = [var.runner]
+}
+
+run "runner_cap_and_lifetime_are_bounded" {
+  command = plan
+
+  variables {
+    runner = { max_runners = 0 }
+  }
+
+  expect_failures = [var.runner]
 }

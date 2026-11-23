@@ -69,11 +69,12 @@ variable "runner_instance_profile_arn" {
 }
 
 variable "controller_role_arn" {
-  description = "ARN of the controller task role that is allowed to pass runner_role_arn to EC2."
+  description = "ARN of the controller task role that is allowed to pass runner_role_arn to EC2. Optional so that the runner layer can be created before, or in the same configuration as, the controller; without it the pass_role constraint names no principal and the account-match check covers only the runner role and profile."
   type        = string
+  default     = null
 
   validation {
-    condition     = can(regex("^arn:[^:]+:iam::[0-9]{12}:role/.+$", var.controller_role_arn)) && !strcontains(var.controller_role_arn, "*")
+    condition     = var.controller_role_arn == null || (can(regex("^arn:[^:]+:iam::[0-9]{12}:role/.+$", var.controller_role_arn)) && !strcontains(var.controller_role_arn, "*"))
     error_message = "controller_role_arn must be an exact IAM role ARN with no wildcard."
   }
 }
@@ -157,7 +158,7 @@ variable "cleanup_deadline" {
 }
 
 variable "tags" {
-  description = "Additional ownership tags. Platform and ManagedBy are fixed by the contract and cannot be overridden."
+  description = "Additional ownership tags. The leo-runners: prefix is reserved for the controller and cannot be used."
   type        = map(string)
   default     = {}
 }

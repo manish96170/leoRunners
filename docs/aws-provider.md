@@ -6,7 +6,7 @@ Phase 2 maps a cloud-neutral `RunnerSpec` to one ephemeral EC2 instance. The pro
 
 - Validate region, Launch Template ID/version, and required network configuration before launch.
 - Launch exactly one instance per runner lease.
-- Apply `Platform=ci-runner`, `ManagedBy=leo-runners`, repository, workflow run, job, runner, `CreatedAt`, and `ExpiresAt` tags at launch.
+- Apply the `leo-runners:managed-by=leo-runners` ownership tag, per-job tags (`leo-runners:runner-id`, `job-id`, `repository`, `run-id`, `workflow`, `created-at`, `expires-at`) and any configured extra tags (`AWS_RUNNER_TAGS`) at launch.
 - Require IMDSv2 using `MetadataOptions.HttpTokens=required`.
 - Poll `DescribeInstances` with a context deadline until the instance is running and status checks are healthy.
 - Treat missing, terminated, or failed instances as provider errors.

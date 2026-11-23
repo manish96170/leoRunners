@@ -25,6 +25,44 @@ module "gateway" {
   }
 }
 
+# Optional runner layer: the launch template, runner role and instance profile,
+# and an ingress-free security group. It is a separate module so the controller
+# can be deployed and proven first. It takes the controller's task role only to
+# check the two stay distinct and in one account; the controller's own inputs
+# depend on the layer, not the other way round.
+module "runner_layer" {
+  count  = var.runner_layer == null ? 0 : 1
+  source = "../../modules/aws-runner-layer"
+
+  name_prefix              = var.name_prefix
+  ami_id                   = var.runner_layer.ami_id
+  instance_type            = var.runner_layer.instance_type
+  vpc_id                   = var.runner_layer.vpc_id
+  subnet_id                = var.runner_layer.subnet_id
+  egress_https_cidr_blocks = var.runner_layer.egress_https_cidr_blocks
+  request_id               = var.runner_layer.request_id
+  cleanup_deadline         = var.runner_layer.cleanup_deadline
+  controller_role_arn      = module.controller.task_role_arn
+  tags                     = var.tags
+}
+
+locals {
+  # The controller may pass exactly the runner role to EC2 and nothing else.
+  # The reviewed policy is the caller's; this appends the one statement the
+  # runner lifecycle needs, scoped to the layer's role.
+  runner_passrole_statement = var.runner_layer == null ? [] : [{
+    Effect    = "Allow"
+    Action    = ["iam:PassRole"]
+    Resource  = [module.runner_layer[0].role_arn]
+    Condition = { StringEquals = { "iam:PassedToService" = "ec2.amazonaws.com" } }
+  }]
+
+  task_role_policy_json = var.runner_layer == null || var.task_role_policy_json == null ? var.task_role_policy_json : jsonencode({
+    Version   = "2012-10-17"
+    Statement = concat(jsondecode(var.task_role_policy_json).Statement, local.runner_passrole_statement)
+  })
+}
+
 module "controller" {
   source = "../../modules/aws-ecs-controller"
 
@@ -45,6 +83,11 @@ module "controller" {
 
   image_digest          = var.image_digest
   secrets_ready         = var.secrets_ready
-  task_role_policy_json = var.task_role_policy_json
+  task_role_policy_json = local.task_role_policy_json
   github                = var.github
+
+  # With the layer: its ready-made runner object plus the labels workflows use.
+  # Without it: {} (lifecycle off). merge() over a list keeps both branches the
+  # same type.
+  runner = merge(concat([{}], [for layer in module.runner_layer : merge(layer.controller_runner, { labels = var.runner_layer.labels })])...)
 }

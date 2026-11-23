@@ -34,7 +34,7 @@ first as the target experience, then the gaps they expose are built.
 - [ ] 2.1c Serve several App installations from one controller (installation ID per event, allowlisted).
 - [ ] 2.1d Apply `GITHUB_JIT_REQUEST_TIMEOUT`, `GITHUB_REGISTRATION_TIMEOUT` and `GITHUB_REGISTRATION_POLL_INTERVAL` in the executable (currently validated but unused).
 - [x] 2.2h Modules validate on AWS provider v5 and v6 (region read by key; `validate-aws-modules.sh --provider-version`). Found by a customer composition on v5.
-- [ ] 2.2c Runner layer: launch template, runner IAM role and instance profile, runner network, behind the `aws-ephemeral-runner` contract.
+- [x] 2.2c Runner layer: `aws-runner-layer` (launch template, runner role and instance profile, ingress-free security group) behind the `aws-ephemeral-runner` contract; controller `RUNNER_MAX_LIFETIME`, `AWS_RUNNER_TAGS`, user data and runner cap wired. Offline only; real EC2 launch still to confirm (2.5d).
 - [ ] 2.2d Publish an official controller image (digest list per release).
 - [ ] 2.2e Wire multi-replica coordination into the executable, then relax `desired_count`.
 - [x] 2.2f Acknowledge webhooks quickly and orchestrate asynchronously (`controller/internal/dispatch`; measured 16s on a cold launch against an emulator before the change). A durable queue is a possible follow-up.
