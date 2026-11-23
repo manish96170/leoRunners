@@ -94,7 +94,15 @@ use the full commit SHA in `ref=`.
 ```sh
 terraform/validate-aws-modules.sh          # fmt, validate, and mocked-provider tests
 terraform/validate-aws-modules.sh --skip-init   # static checks only
+terraform/validate-aws-modules.sh --provider-version 5.100.0   # pin the AWS provider
+terraform/validate-aws-modules.sh --provider-version 6.73.0
 ```
+
+The modules declare AWS provider `>= 5.0, < 7.0`. Without `--provider-version`
+the newest matching release is used, which hides problems at the other end of
+the range, so check both. The two major versions differ in how the current
+region is exposed (`name` on v5, `region` on v6, and reading the wrong one fails
+or warns), which the modules handle by reading it by key.
 
 The tests use a mocked AWS provider: no credentials, no AWS API calls.
 `terraform init` downloads the provider plugin from the public registry.

@@ -13,8 +13,10 @@ locals {
     var.tags,
   )
 
-  # `region` exists on provider v6 and later; `name` on v5.
-  region     = try(data.aws_region.current.region, data.aws_region.current.name)
+  # `name` is the provider v5 attribute and `region` the v6 one. Naming either
+  # one directly fails validation (v5) or warns as deprecated (v6), so the
+  # attribute is chosen by key and only that one is read.
+  region     = data.aws_region.current[contains(keys(data.aws_region.current), "region") ? "region" : "name"]
   foundation = var.create_foundation
   phase      = var.enable_service ? "service" : (var.create_foundation ? "foundation" : "disabled")
 

@@ -106,7 +106,7 @@ resource "aws_vpc_endpoint" "interface" {
   for_each = local.interface_services
 
   vpc_id              = var.vpc_id
-  service_name        = "com.amazonaws.${data.aws_region.current.region}.${each.key}"
+  service_name        = "com.amazonaws.${local.region}.${each.key}"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = var.endpoint_subnet_ids
   security_group_ids  = [aws_security_group.endpoint[0].id]
@@ -126,7 +126,7 @@ resource "aws_vpc_endpoint" "gateway" {
   for_each = local.gateway_services
 
   vpc_id            = var.vpc_id
-  service_name      = "com.amazonaws.${data.aws_region.current.region}.${each.key}"
+  service_name      = "com.amazonaws.${local.region}.${each.key}"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = var.endpoint_route_table_ids
 
@@ -141,6 +141,13 @@ resource "aws_vpc_endpoint" "gateway" {
 }
 
 data "aws_region" "current" {}
+
+locals {
+  # `name` is the provider v5 attribute and `region` the v6 one. Naming either
+  # one directly fails validation (v5) or warns as deprecated (v6), so the
+  # attribute is chosen by key and only that one is read.
+  region = data.aws_region.current[contains(keys(data.aws_region.current), "region") ? "region" : "name"]
+}
 
 resource "aws_eip" "nat" {
   count = var.enable_nat_gateway ? 1 : 0
