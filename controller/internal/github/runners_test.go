@@ -162,3 +162,58 @@ func TestListRunnersReturnsTypedAPIError(t *testing.T) {
 		t.Fatalf("error = %#v, want typed forbidden API error", err)
 	}
 }
+
+func TestListOrganizationRunnersUsesTheOrganizationEndpointAndPaginates(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/orgs/acme/actions/runners" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		requests.Add(1)
+		if r.URL.Query().Get("page") == "1" {
+			runners := make([]JITRunner, githubRunnerPageSize)
+			for i := range runners {
+				runners[i] = JITRunner{ID: int64(i + 1), Name: "r" + strconv.Itoa(i+1), Status: "offline"}
+			}
+			_ = json.NewEncoder(w).Encode(RunnerList{Runners: runners})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(RunnerList{Runners: []JITRunner{{ID: 101, Name: "r101", Status: "online"}}})
+	}))
+	defer server.Close()
+	client, _ := NewJITClient(JITClientConfig{BaseURL: server.URL + "/api/", TokenSource: StaticBearerToken("t"), Timeout: time.Second})
+	runners, err := client.ListOrganizationRunners(context.Background(), "acme")
+	if err != nil || len(runners) != 101 || requests.Load() != 2 {
+		t.Fatalf("got %d runners over %d requests, error = %v", len(runners), requests.Load(), err)
+	}
+	if _, err := client.ListOrganizationRunners(context.Background(), ""); err == nil {
+		t.Fatal("an empty organization must be rejected")
+	}
+}
+
+func TestOrganizationRegistrationVerifierWaitsForTheExactOnlineRunner(t *testing.T) {
+	var polls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/orgs/acme/actions/runners" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		status := "offline"
+		if polls.Add(1) >= 2 {
+			status = "online"
+		}
+		_ = json.NewEncoder(w).Encode(RunnerList{Runners: []JITRunner{
+			{ID: 8, Name: "other", Status: "online"},
+			{ID: 9, Name: "ephemeral-9", Status: status},
+		}})
+	}))
+	defer server.Close()
+	client, _ := NewJITClient(JITClientConfig{BaseURL: server.URL, TokenSource: StaticBearerToken("t"), Timeout: time.Second})
+	verifier, _ := NewRegistrationVerifier(client, RegistrationVerifierConfig{Timeout: time.Second, Interval: time.Millisecond})
+	runner, err := verifier.WaitForOrganizationRegistration(context.Background(), "acme", 9, "ephemeral-9")
+	if err != nil || runner.ID != 9 || polls.Load() < 2 {
+		t.Fatalf("runner = %+v after %d polls, error = %v", runner, polls.Load(), err)
+	}
+	if _, err := verifier.WaitForOrganizationRegistration(context.Background(), "", 9, "x"); err == nil {
+		t.Fatal("an empty organization must be rejected")
+	}
+}

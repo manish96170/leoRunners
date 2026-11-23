@@ -139,6 +139,7 @@ locals {
     GITHUB_ALLOWED_LABELS        = join(",", var.github.allowed_labels)
     GITHUB_ALLOW_FORKS           = tostring(var.github.allow_forks)
     GITHUB_API_BASE_URL          = var.github.api_base_url != null ? var.github.api_base_url : ""
+    GITHUB_RUNNER_SCOPE          = var.github.runner_scope
   } : {}
 
   github_app_environment = local.use_github_app ? {

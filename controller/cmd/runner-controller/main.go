@@ -303,6 +303,7 @@ func configureGitHubAssignment(service *controller.Service, repository state.Rep
 		return
 	}
 	groupID := jit.RunnerGroupID
+	orgScope := jit.RunnerScope == runtimeconfig.RunnerScopeOrganization
 	tokenSource, err := newGitHubTokenSource(jit)
 	if err != nil {
 		log.Fatal(err)
@@ -321,7 +322,7 @@ func configureGitHubAssignment(service *controller.Service, repository state.Rep
 		log.Fatalf("GitHub scope policy is required when JIT is enabled: %v", err)
 	}
 	service.ScopePolicy = &scope
-	service.Assignment = &runners.Service{State: repository, Provider: provider, JIT: controller.GitHubJITAdapter{Client: client}, Registration: controller.GitHubRegistrationAdapter{Verifier: verifier}, RunnerGroupID: &groupID, Policy: runners.AssignmentPolicy{Organizations: append([]string(nil), scope.Organizations...), Repositories: append([]string(nil), scope.Repositories...), AllowedLabels: append([]string(nil), scope.AllowedLabels...), RunnerGroupID: groupID, AllowForks: scope.AllowForks}}
+	service.Assignment = &runners.Service{State: repository, Provider: provider, JIT: controller.GitHubJITAdapter{Client: client, Organization: orgScope}, Registration: controller.GitHubRegistrationAdapter{Verifier: verifier, Organization: orgScope}, RunnerGroupID: &groupID, Policy: runners.AssignmentPolicy{Organizations: append([]string(nil), scope.Organizations...), Repositories: append([]string(nil), scope.Repositories...), AllowedLabels: append([]string(nil), scope.AllowedLabels...), RunnerGroupID: groupID, AllowForks: scope.AllowForks}}
 }
 
 func envOrDefault(name, fallback string) string {

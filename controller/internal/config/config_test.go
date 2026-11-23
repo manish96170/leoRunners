@@ -402,3 +402,29 @@ func TestLoadFromRejectsUnsafeWebhookProcessingSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestRunnerScopeDefaultsToRepositoryAndAcceptsOrganization(t *testing.T) {
+	c, err := LoadFrom(validEnv())
+	if err != nil || c.GitHubJIT.RunnerScope != RunnerScopeRepository {
+		t.Fatalf("default scope = %q, error = %v", c.GitHubJIT.RunnerScope, err)
+	}
+	env := appEnv()
+	env["GITHUB_RUNNER_SCOPE"] = "Organization"
+	c, err = LoadFrom(env)
+	if err != nil || c.GitHubJIT.RunnerScope != RunnerScopeOrganization {
+		t.Fatalf("scope = %q, error = %v", c.GitHubJIT.RunnerScope, err)
+	}
+}
+
+func TestRunnerScopeRejectsUnknownValuesAndStaleSettings(t *testing.T) {
+	env := appEnv()
+	env["GITHUB_RUNNER_SCOPE"] = "enterprise"
+	if _, err := LoadFrom(env); err == nil {
+		t.Fatal("an unknown runner scope must be rejected")
+	}
+	disabled := validEnv()
+	disabled["GITHUB_RUNNER_SCOPE"] = "organization"
+	if _, err := LoadFrom(disabled); err == nil {
+		t.Fatal("an organization scope with JIT disabled must be rejected, like other stale JIT settings")
+	}
+}

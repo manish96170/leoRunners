@@ -9,8 +9,13 @@ import (
 )
 
 // GitHubJITAdapter adapts the owner/repository-neutral controller contract to
-// the GitHub REST client's owner and repository path parameters.
-type GitHubJITAdapter struct{ Client *github.Client }
+// the GitHub REST client's owner and repository path parameters. With
+// Organization set it registers the runner at organization level, in the
+// configured organization runner group, instead of on the repository.
+type GitHubJITAdapter struct {
+	Client       *github.Client
+	Organization bool
+}
 
 func (a GitHubJITAdapter) GenerateJITConfig(ctx context.Context, request runners.JITRequest) (runners.JITConfig, error) {
 	if a.Client == nil {
@@ -20,7 +25,14 @@ func (a GitHubJITAdapter) GenerateJITConfig(ctx context.Context, request runners
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return runners.JITConfig{}, fmt.Errorf("invalid GitHub repository %q", request.Repository)
 	}
-	response, err := a.Client.GenerateJITConfig(ctx, parts[0], parts[1], github.JITConfigRequest{Name: request.Name, Labels: request.Labels, RunnerGroupID: request.RunnerGroupID, WorkFolder: "_work"})
+	body := github.JITConfigRequest{Name: request.Name, Labels: request.Labels, RunnerGroupID: request.RunnerGroupID, WorkFolder: "_work"}
+	var response github.JITConfigResponse
+	var err error
+	if a.Organization {
+		response, err = a.Client.GenerateOrganizationJITConfig(ctx, parts[0], body)
+	} else {
+		response, err = a.Client.GenerateJITConfig(ctx, parts[0], parts[1], body)
+	}
 	if err != nil {
 		return runners.JITConfig{}, err
 	}
@@ -31,7 +43,10 @@ var _ runners.JITClient = GitHubJITAdapter{}
 
 // GitHubRegistrationAdapter adapts GitHub's repository runner poller to the
 // provider-neutral registration verifier used by the assignment service.
-type GitHubRegistrationAdapter struct{ Verifier *github.RegistrationVerifier }
+type GitHubRegistrationAdapter struct {
+	Verifier     *github.RegistrationVerifier
+	Organization bool
+}
 
 func (a GitHubRegistrationAdapter) WaitForRegistration(ctx context.Context, request runners.RegistrationRequest) (runners.GitHubRunner, error) {
 	if a.Verifier == nil {
@@ -41,7 +56,13 @@ func (a GitHubRegistrationAdapter) WaitForRegistration(ctx context.Context, requ
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return runners.GitHubRunner{}, fmt.Errorf("invalid GitHub repository %q", request.Repository)
 	}
-	result, err := a.Verifier.WaitForRegistration(ctx, parts[0], parts[1], request.RunnerID, request.RunnerName)
+	var result github.JITRunner
+	var err error
+	if a.Organization {
+		result, err = a.Verifier.WaitForOrganizationRegistration(ctx, parts[0], request.RunnerID, request.RunnerName)
+	} else {
+		result, err = a.Verifier.WaitForRegistration(ctx, parts[0], parts[1], request.RunnerID, request.RunnerName)
+	}
 	if err != nil {
 		return runners.GitHubRunner{}, err
 	}

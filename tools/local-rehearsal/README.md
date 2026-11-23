@@ -68,7 +68,8 @@ Settings, Developer settings, GitHub Apps, **New GitHub App**:
 | Name | anything unique, for example `my-leorunners-test` |
 | Homepage URL | any URL (your repository's, for example) |
 | Webhook | **Active**. URL: set it after step 3 (`tunnel.sh` prints it). Secret: the value of `LEO_WEBHOOK_SECRET`, default `rehearsal-webhook-secret`. Change it for anything beyond a throwaway test |
-| Repository permissions | **Administration: Read and write** and **Actions: Read-only**. Nothing else. (Metadata read is added automatically) |
+| Repository permissions | **Actions: Read-only**, plus **Administration: Read and write** for the default repository scope. Nothing else. (Metadata read is added automatically) |
+| Organization permissions | Only for `GITHUB_RUNNER_SCOPE=organization` (needs an organization): **Self-hosted runners: Read and write**. Then the App does not need Administration. |
 | Subscribe to events | **Workflow job** |
 | Where can this App be installed? | Only on this account |
 
