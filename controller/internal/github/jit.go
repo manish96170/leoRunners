@@ -146,6 +146,7 @@ func (e *APIError) Error() string {
 }
 
 // GenerateJITConfig requests a one-time configuration for a repository runner.
+// The GitHub App needs repository Administration: write for this endpoint.
 func (c *Client) GenerateJITConfig(ctx context.Context, owner, repo string, request JITConfigRequest) (JITConfigResponse, error) {
 	var result JITConfigResponse
 	owner = strings.TrimSpace(owner)
@@ -153,11 +154,37 @@ func (c *Client) GenerateJITConfig(ctx context.Context, owner, repo string, requ
 	if owner == "" || repo == "" {
 		return result, errors.New("GitHub repository owner and name are required")
 	}
-	if strings.TrimSpace(request.Name) == "" || len(request.Labels) == 0 || request.RunnerGroupID == nil || *request.RunnerGroupID <= 0 {
-		return result, errors.New("GitHub JIT request requires name, labels, and a positive runner_group_id")
-	}
 	if strings.ContainsAny(owner, "/\\") || strings.ContainsAny(repo, "/\\") {
 		return result, errors.New("GitHub repository owner and name must be single path segments")
+	}
+	endpoint, err := c.jitURL(owner, repo)
+	if err != nil {
+		return result, err
+	}
+	return c.generateJITConfig(ctx, endpoint, request)
+}
+
+// GenerateOrganizationJITConfig requests a one-time configuration for an
+// organization-level runner. The runner joins the organization runner group
+// named by request.RunnerGroupID, and GitHub decides which repositories may use
+// it from that group's settings. The GitHub App needs only the organization
+// "Self-hosted runners: write" permission, not repository Administration.
+func (c *Client) GenerateOrganizationJITConfig(ctx context.Context, org string, request JITConfigRequest) (JITConfigResponse, error) {
+	org = strings.TrimSpace(org)
+	if err := validateOrganization(org); err != nil {
+		return JITConfigResponse{}, err
+	}
+	endpoint, err := c.orgJITURL(org)
+	if err != nil {
+		return JITConfigResponse{}, err
+	}
+	return c.generateJITConfig(ctx, endpoint, request)
+}
+
+func (c *Client) generateJITConfig(ctx context.Context, endpoint *url.URL, request JITConfigRequest) (JITConfigResponse, error) {
+	var result JITConfigResponse
+	if strings.TrimSpace(request.Name) == "" || len(request.Labels) == 0 || request.RunnerGroupID == nil || *request.RunnerGroupID <= 0 {
+		return result, errors.New("GitHub JIT request requires name, labels, and a positive runner_group_id")
 	}
 
 	token, err := c.tokenSource.BearerToken(ctx)
@@ -170,10 +197,6 @@ func (c *Client) GenerateJITConfig(ctx context.Context, owner, repo string, requ
 	body, err := json.Marshal(request)
 	if err != nil {
 		return result, fmt.Errorf("encode GitHub JIT request: %w", err)
-	}
-	endpoint, err := c.jitURL(owner, repo)
-	if err != nil {
-		return result, err
 	}
 	requestCtx := ctx
 	var cancel context.CancelFunc
@@ -207,6 +230,18 @@ func (c *Client) GenerateJITConfig(ctx context.Context, owner, repo string, requ
 		return result, errors.New("GitHub JIT response has no encoded_jit_config")
 	}
 	return result, nil
+}
+
+func (c *Client) orgJITURL(org string) (*url.URL, error) {
+	base := *c.baseURL
+	rawPath := strings.TrimRight(base.EscapedPath(), "/") + "/orgs/" + url.PathEscape(org) + "/actions/runners/generate-jitconfig"
+	base.RawPath = rawPath
+	decodedPath, err := url.PathUnescape(rawPath)
+	if err != nil {
+		return nil, fmt.Errorf("escape GitHub organization path: %w", err)
+	}
+	base.Path = decodedPath
+	return &base, nil
 }
 
 func (c *Client) jitURL(owner, repo string) (*url.URL, error) {

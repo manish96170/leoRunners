@@ -28,11 +28,24 @@ type RunnerList struct {
 // ListRunners returns all self-hosted runners visible in a repository. It
 // follows GitHub pagination so callers do not need to reason about page size.
 func (c *Client) ListRunners(ctx context.Context, owner, repo string) ([]JITRunner, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := validateRepository(owner, repo); err != nil {
 		return nil, err
+	}
+	return c.listRunners(ctx, func(page int) (*url.URL, error) { return c.runnersURL(owner, repo, page) })
+}
+
+// ListOrganizationRunners returns all self-hosted runners in an organization.
+// It needs the organization "Self-hosted runners: read" permission.
+func (c *Client) ListOrganizationRunners(ctx context.Context, org string) ([]JITRunner, error) {
+	if err := validateOrganization(org); err != nil {
+		return nil, err
+	}
+	return c.listRunners(ctx, func(page int) (*url.URL, error) { return c.orgRunnersURL(org, page) })
+}
+
+func (c *Client) listRunners(ctx context.Context, urlFor func(page int) (*url.URL, error)) ([]JITRunner, error) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	token, err := c.tokenSource.BearerToken(ctx)
@@ -45,7 +58,7 @@ func (c *Client) ListRunners(ctx context.Context, owner, repo string) ([]JITRunn
 
 	var runners []JITRunner
 	for page := 1; ; page++ {
-		endpoint, err := c.runnersURL(owner, repo, page)
+		endpoint, err := urlFor(page)
 		if err != nil {
 			return nil, err
 		}
@@ -71,6 +84,7 @@ type RegistrationVerifierConfig struct {
 // to wait for a particular GitHub runner. Implementations must honor ctx.
 type RegistrationWaiter interface {
 	WaitForRegistration(context.Context, string, string, int64, string) (JITRunner, error)
+	WaitForOrganizationRegistration(ctx context.Context, org string, runnerID int64, runnerName string) (JITRunner, error)
 }
 
 // RegistrationVerifier polls GitHub until the expected runner is registered
@@ -104,12 +118,29 @@ func NewRegistrationVerifier(client *Client, config RegistrationVerifierConfig) 
 // online. The caller's context always takes precedence over the verifier
 // deadline.
 func (v *RegistrationVerifier) WaitForRegistration(ctx context.Context, owner, repo string, runnerID int64, runnerName string) (JITRunner, error) {
+	if err := validateRepository(owner, repo); err != nil {
+		return JITRunner{}, err
+	}
+	return v.wait(ctx, runnerID, runnerName, func(ctx context.Context) ([]JITRunner, error) {
+		return v.client.ListRunners(ctx, owner, repo)
+	})
+}
+
+// WaitForOrganizationRegistration is WaitForRegistration for a runner that
+// was created at organization level.
+func (v *RegistrationVerifier) WaitForOrganizationRegistration(ctx context.Context, org string, runnerID int64, runnerName string) (JITRunner, error) {
+	if err := validateOrganization(org); err != nil {
+		return JITRunner{}, err
+	}
+	return v.wait(ctx, runnerID, runnerName, func(ctx context.Context) ([]JITRunner, error) {
+		return v.client.ListOrganizationRunners(ctx, org)
+	})
+}
+
+func (v *RegistrationVerifier) wait(ctx context.Context, runnerID int64, runnerName string, list func(context.Context) ([]JITRunner, error)) (JITRunner, error) {
 	var empty JITRunner
 	if v == nil || v.client == nil {
 		return empty, errors.New("GitHub registration verifier is not configured")
-	}
-	if err := validateRepository(owner, repo); err != nil {
-		return empty, err
 	}
 	if runnerID <= 0 || strings.TrimSpace(runnerName) == "" {
 		return empty, errors.New("GitHub runner ID and name are required")
@@ -121,7 +152,7 @@ func (v *RegistrationVerifier) WaitForRegistration(ctx context.Context, owner, r
 	defer cancel()
 
 	for {
-		runners, err := v.client.ListRunners(pollCtx, owner, repo)
+		runners, err := list(pollCtx)
 		if err != nil {
 			if pollCtx.Err() != nil {
 				return empty, pollCtx.Err()
@@ -148,6 +179,20 @@ func (v *RegistrationVerifier) WaitForRegistration(ctx context.Context, owner, r
 
 func (c *Client) runnersURL(owner, repo string, page int) (*url.URL, error) {
 	endpoint, err := c.jitURL(owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	endpoint.Path = strings.TrimSuffix(endpoint.Path, "/actions/runners/generate-jitconfig") + "/actions/runners"
+	endpoint.RawPath = ""
+	query := endpoint.Query()
+	query.Set("per_page", strconv.Itoa(githubRunnerPageSize))
+	query.Set("page", strconv.Itoa(page))
+	endpoint.RawQuery = query.Encode()
+	return endpoint, nil
+}
+
+func (c *Client) orgRunnersURL(org string, page int) (*url.URL, error) {
+	endpoint, err := c.orgJITURL(org)
 	if err != nil {
 		return nil, err
 	}
@@ -187,6 +232,17 @@ func (c *Client) getJSON(ctx context.Context, endpoint *url.URL, token string, d
 	}
 	if err := json.NewDecoder(response.Body).Decode(destination); err != nil {
 		return fmt.Errorf("decode GitHub runner response: %w", err)
+	}
+	return nil
+}
+
+func validateOrganization(org string) error {
+	org = strings.TrimSpace(org)
+	if org == "" {
+		return errors.New("GitHub organization is required")
+	}
+	if strings.ContainsAny(org, "/\\") {
+		return errors.New("GitHub organization must be a single path segment")
 	}
 	return nil
 }

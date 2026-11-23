@@ -653,3 +653,75 @@ run "github_app_accepts_an_existing_key_secret" {
     error_message = "The adopted key secret ARN must be published."
   }
 }
+
+run "organization_runner_scope_reaches_the_container" {
+  command = plan
+
+  variables {
+    create_foundation = true
+    github = {
+      jit_enabled           = true
+      runner_group_id       = 1
+      runner_scope          = "organization"
+      allowed_organizations = ["example-org"]
+      allowed_labels        = ["self-hosted"]
+      app = {
+        app_id            = "12345"
+        installation_id   = 678
+        token_permissions = { organization_self_hosted_runners = "write" }
+      }
+    }
+  }
+
+  assert {
+    condition = (
+      output.container_environment["GITHUB_RUNNER_SCOPE"] == "organization" &&
+      output.container_environment["GITHUB_APP_TOKEN_PERMISSIONS"] == "organization_self_hosted_runners=write"
+    )
+    error_message = "The organization scope and its narrower token permission must reach the container."
+  }
+}
+
+run "repository_runner_scope_is_the_default" {
+  command = plan
+
+  variables {
+    create_foundation = true
+    github = {
+      jit_enabled           = true
+      runner_group_id       = 1
+      allowed_organizations = ["example-org"]
+      allowed_labels        = ["self-hosted"]
+    }
+  }
+
+  assert {
+    condition     = output.container_environment["GITHUB_RUNNER_SCOPE"] == "repository"
+    error_message = "Existing deployments must keep repository registration unless they opt in."
+  }
+}
+
+run "unknown_runner_scope_is_rejected" {
+  command = plan
+
+  variables {
+    github = {
+      jit_enabled  = true
+      runner_scope = "enterprise"
+    }
+  }
+
+  expect_failures = [var.github]
+}
+
+run "organization_scope_requires_jit" {
+  command = plan
+
+  variables {
+    github = {
+      runner_scope = "organization"
+    }
+  }
+
+  expect_failures = [var.github]
+}

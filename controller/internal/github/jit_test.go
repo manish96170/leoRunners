@@ -168,3 +168,90 @@ func TestJITURLPreservesBasePathAndEscaping(t *testing.T) {
 		t.Fatalf("escaped URL path = %q", parsed.EscapedPath())
 	}
 }
+
+func TestGenerateOrganizationJITConfigUsesTheOrganizationEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/orgs/acme/actions/runners/generate-jitconfig" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer installation-token" {
+			t.Errorf("authorization = %q", got)
+		}
+		body, _ := io.ReadAll(r.Body)
+		if want := `{"name":"runner-1","runner_group_id":7,"labels":["self-hosted","linux"],"work_folder":"_work"}`; string(body) != want {
+			t.Errorf("body = %s, want %s", body, want)
+		}
+		_, _ = io.WriteString(w, `{"runner":{"id":21,"name":"runner-1","status":"offline"},"encoded_jit_config":"org-config","expires_at":"2026-09-13T12:00:00Z"}`)
+	}))
+	defer server.Close()
+
+	client, err := NewJITClient(JITClientConfig{BaseURL: server.URL + "/api/", TokenSource: StaticBearerToken("installation-token")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := client.GenerateOrganizationJITConfig(context.Background(), "acme", JITConfigRequest{
+		Name: "runner-1", RunnerGroupID: int64Ptr(7), Labels: []string{"self-hosted", "linux"}, WorkFolder: "_work",
+	})
+	if err != nil || got.Runner.ID != 21 || got.EncodedJITConfig != "org-config" {
+		t.Fatalf("got %+v, error = %v", got, err)
+	}
+}
+
+func TestGenerateOrganizationJITConfigRejectsBadInputWithoutCallingGitHub(t *testing.T) {
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls++ }))
+	defer server.Close()
+	client, err := NewJITClient(JITClientConfig{BaseURL: server.URL, TokenSource: StaticBearerToken("t")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := JITConfigRequest{Name: "r", RunnerGroupID: int64Ptr(1), Labels: []string{"self-hosted"}}
+	cases := map[string]struct {
+		org     string
+		request JITConfigRequest
+	}{
+		"empty organization":   {"", valid},
+		"path traversal":       {"acme/evil", valid},
+		"no runner group":      {"acme", JITConfigRequest{Name: "r", Labels: []string{"self-hosted"}}},
+		"zero runner group":    {"acme", JITConfigRequest{Name: "r", RunnerGroupID: int64Ptr(0), Labels: []string{"self-hosted"}}},
+		"no labels":            {"acme", JITConfigRequest{Name: "r", RunnerGroupID: int64Ptr(1)}},
+		"no name":              {"acme", JITConfigRequest{RunnerGroupID: int64Ptr(1), Labels: []string{"self-hosted"}}},
+		"whitespace-only name": {"acme", JITConfigRequest{Name: "  ", RunnerGroupID: int64Ptr(1), Labels: []string{"self-hosted"}}},
+	}
+	for name, c := range cases {
+		if _, err := client.GenerateOrganizationJITConfig(context.Background(), c.org, c.request); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+	if calls != 0 {
+		t.Fatalf("GitHub was called %d times for invalid input", calls)
+	}
+}
+
+func TestGenerateOrganizationJITConfigEscapesTheOrganization(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.EscapedPath(); got != "/orgs/acme%20inc/actions/runners/generate-jitconfig" {
+			t.Errorf("escaped path = %q", got)
+		}
+		_, _ = io.WriteString(w, `{"runner":{"id":1,"name":"r"},"encoded_jit_config":"x"}`)
+	}))
+	defer server.Close()
+	client, _ := NewJITClient(JITClientConfig{BaseURL: server.URL, TokenSource: StaticBearerToken("t")})
+	if _, err := client.GenerateOrganizationJITConfig(context.Background(), "acme inc", JITConfigRequest{Name: "r", RunnerGroupID: int64Ptr(1), Labels: []string{"self-hosted"}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGenerateOrganizationJITConfigReportsAPIErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = io.WriteString(w, `{"message":"Resource not accessible by integration"}`)
+	}))
+	defer server.Close()
+	client, _ := NewJITClient(JITClientConfig{BaseURL: server.URL, TokenSource: StaticBearerToken("t")})
+	_, err := client.GenerateOrganizationJITConfig(context.Background(), "acme", JITConfigRequest{Name: "r", RunnerGroupID: int64Ptr(1), Labels: []string{"self-hosted"}})
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusForbidden {
+		t.Fatalf("error = %v, want a 403 APIError", err)
+	}
+}

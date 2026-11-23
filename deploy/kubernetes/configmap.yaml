@@ -35,6 +35,8 @@ data:
   GCP_NAME_PREFIX: leo-runner
   GITHUB_JIT_ENABLED: "false"
   GITHUB_RUNNER_GROUP_ID: "0"
+  # repository (default) or organization. See docs/github-runtime-contract.md.
+  GITHUB_RUNNER_SCOPE: "repository"
   # GitHub App authentication (an alternative to a static installation token;
   # the two are mutually exclusive). Leave empty unless JIT is enabled.
   GITHUB_APP_ID: ""

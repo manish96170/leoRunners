@@ -184,12 +184,23 @@ type GitHubJITConfig struct {
 	AppInstallationID   int64
 	AppPrivateKey       string
 	AppTokenPermissions map[string]string
+	// RunnerScope is where JIT runners are registered: "repository" (the
+	// default, also when empty; needs repository Administration: write) or "organization"
+	// (needs only the organization Self-hosted runners permission, and the
+	// runner group decides which repositories may use the runner).
+	RunnerScope         string
 	RunnerGroupID       int64
 	APIBaseURL          string
 	RequestTimeout      time.Duration
 	RegistrationTimeout time.Duration
 	PollInterval        time.Duration
 }
+
+// Where JIT runners are registered (GitHubJITConfig.RunnerScope).
+const (
+	RunnerScopeRepository   = "repository"
+	RunnerScopeOrganization = "organization"
+)
 
 // AppConfigured reports whether any GitHub App setting is present. Validation
 // requires the full set whenever any of it is.
@@ -373,6 +384,7 @@ func LoadFrom(env map[string]string) (Config, error) {
 			return c, fmt.Errorf("%w: GITHUB_APP_TOKEN_PERMISSIONS: %v", ErrInvalid, err)
 		}
 	}
+	c.GitHubJIT.RunnerScope = strings.ToLower(getOr(env, "GITHUB_RUNNER_SCOPE", RunnerScopeRepository))
 	if !present && (c.GitHubJIT.InstallationToken != "" || c.GitHubJIT.AppConfigured()) {
 		c.GitHubJIT.Enabled = true
 	}
@@ -512,6 +524,9 @@ func (c Config) Validate() error {
 	if len(c.GitHubJIT.AppTokenPermissions) > 0 && !app {
 		problems = append(problems, "GITHUB_APP_TOKEN_PERMISSIONS requires the GitHub App settings")
 	}
+	if scope := c.GitHubJIT.RunnerScope; scope != "" && scope != RunnerScopeRepository && scope != RunnerScopeOrganization {
+		problems = append(problems, "GITHUB_RUNNER_SCOPE must be repository or organization")
+	}
 	if c.GitHubJIT.Enabled {
 		if c.GitHubJIT.InstallationToken == "" && !app {
 			problems = append(problems, "GITHUB_APP_INSTALLATION_TOKEN or the GitHub App settings are required when JIT is enabled")
@@ -522,7 +537,7 @@ func (c Config) Validate() error {
 		if app && !secureAPIURL(c.GitHubJIT.APIBaseURL) {
 			problems = append(problems, "GITHUB_API_BASE_URL must use HTTPS when authenticating as a GitHub App")
 		}
-	} else if c.GitHubJIT.InstallationToken != "" || c.GitHubJIT.RunnerGroupID != 0 || app {
+	} else if c.GitHubJIT.InstallationToken != "" || c.GitHubJIT.RunnerGroupID != 0 || app || c.GitHubJIT.RunnerScope == RunnerScopeOrganization {
 		problems = append(problems, "JIT credentials and runner group must be unset when JIT is disabled")
 	}
 	if !httpsURL(c.GitHubJIT.APIBaseURL) {

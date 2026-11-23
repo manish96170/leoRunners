@@ -496,6 +496,13 @@ variable "github" {
     allowlist, and one way to authenticate are all required, matching the
     controller's startup validation.
 
+    runner_scope picks where runners register. "repository" (default) uses the
+    repository endpoint and needs the App to hold repository Administration:
+    write. "organization" uses the organization endpoint and needs only the
+    organization "Self-hosted runners: write" permission; runner_group_id must
+    then be an organization runner group, and that group's repository access
+    decides which repositories may use the runners.
+
     Authentication is either a GitHub App (set `app`; the controller mints its
     own short-lived installation tokens from a private key held in Secrets
     Manager) or an externally rotated installation token (leave `app` null).
@@ -511,6 +518,7 @@ variable "github" {
     allowed_labels        = optional(list(string), [])
     allow_forks           = optional(bool, false)
     api_base_url          = optional(string)
+    runner_scope          = optional(string, "repository")
     app = optional(object({
       app_id            = string
       installation_id   = number
@@ -540,6 +548,16 @@ variable "github" {
   validation {
     condition     = var.github.app == null || var.github.jit_enabled
     error_message = "github.app requires github.jit_enabled = true."
+  }
+
+  validation {
+    condition     = contains(["repository", "organization"], var.github.runner_scope)
+    error_message = "github.runner_scope must be repository or organization."
+  }
+
+  validation {
+    condition     = var.github.runner_scope == "repository" || var.github.jit_enabled
+    error_message = "github.runner_scope = organization requires github.jit_enabled = true."
   }
 }
 

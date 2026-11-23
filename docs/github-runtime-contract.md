@@ -11,6 +11,7 @@
 | `GITHUB_APP_TOKEN_PERMISSIONS` | optional, App mode | `github.app.token_permissions`, for example `administration=write` |
 | `GITHUB_APP_INSTALLATION_TOKEN` | static-token mode | Secrets Manager reference |
 | `GITHUB_RUNNER_GROUP_ID` | with JIT | `github.runner_group_id` |
+| `GITHUB_RUNNER_SCOPE` | optional, `repository` (default) or `organization` | `github.runner_scope` |
 | `GITHUB_ALLOWED_ORGANIZATIONS` / `GITHUB_ALLOWED_REPOSITORIES` | with JIT, at least one | `github.allowed_organizations` / `allowed_repositories` |
 | `GITHUB_ALLOWED_LABELS` | with JIT | `github.allowed_labels` |
 | `GITHUB_ALLOW_FORKS`, `GITHUB_API_BASE_URL` | optional | `github.allow_forks`, `github.api_base_url` |
@@ -69,10 +70,12 @@ token and restarts the controller on rotation.
 Nothing in LeoRunners creates the App. In the account that owns the
 repositories:
 
-1. **Permissions.** Repository permissions: **Administration: read and write**
-   (the repository-level JIT endpoints need it) and **Actions: read** (GitHub
-   requires at least this to subscribe to `workflow_job` events). Metadata read
-   is granted automatically. Grant nothing else.
+1. **Permissions.** Repository permissions: **Actions: read** (GitHub requires
+   at least this to subscribe to `workflow_job` events). Metadata read is
+   granted automatically. Then, depending on `GITHUB_RUNNER_SCOPE`:
+   organization scope (preferred) needs the organization permission
+   **Self-hosted runners: read and write**; repository scope needs the broad
+   repository permission **Administration: read and write**. Grant nothing else.
 2. **Webhook.** Subscribe to **Workflow job**. Set the URL to your gateway's
    webhook path and the secret to the value you store in the webhook secret
    container.
@@ -104,22 +107,33 @@ the secret, force a new deployment (`aws ecs update-service --force-new-deployme
 confirm the startup log reports `GitHub App authentication ok`, then delete the
 old key in GitHub.
 
-## Permissions finding: an org-level endpoint exists
+## Where runners register: repository or organization
 
-The controller currently calls the repository-level endpoint
-`POST /repos/{owner}/{repo}/actions/runners/generate-jitconfig`. In GitHub's
-current documentation that endpoint requires the repository **Administration**
-write permission, which is a broad grant for an App.
+`GITHUB_RUNNER_SCOPE` (`github.runner_scope` in Terraform) chooses the GitHub
+endpoint the controller uses to create and look up runners.
 
-GitHub also documents an organization-level endpoint,
-`POST /orgs/{org}/actions/runners/generate-jitconfig`, with the same request and
-response, and lists it under the organization **Self-hosted runners** write
-permission, a much narrower grant. Moving the controller to the org-level
-endpoint would let customers grant that permission instead of repository
-Administration. This is not implemented yet (it changes how runner groups and
-repository scope interact) and is tracked in `TODO.md`. Which endpoint is usable
-can also depend on the GitHub plan and runner-group configuration; confirm in a
-test organization before relying on it.
+| | `repository` (default) | `organization` |
+|---|---|---|
+| Creates runners with | `POST /repos/{owner}/{repo}/actions/runners/generate-jitconfig` | `POST /orgs/{org}/actions/runners/generate-jitconfig` |
+| Looks runners up with | `GET /repos/{owner}/{repo}/actions/runners` | `GET /orgs/{org}/actions/runners` |
+| App permission needed | repository **Administration: read and write** (a broad grant: it includes full repository administration) | organization **Self-hosted runners: read and write** |
+| `GITHUB_RUNNER_GROUP_ID` | any group the repository can use | an **organization** runner group |
+| Who decides which repositories may use the runner | the controller allowlists only | the controller allowlists **and** the runner group's repository access on GitHub |
+
+Prefer `organization`: it needs a much narrower grant, and the runner group
+adds a second, independent limit on which repositories can reach the runners.
+The controller's own allowlists (`GITHUB_ALLOWED_ORGANIZATIONS`,
+`GITHUB_ALLOWED_REPOSITORIES`, labels, forks) apply in both scopes. Webhooks
+still identify the repository; the organization is taken from the repository
+owner, so a repository owned by a user account cannot use `organization`.
+
+With `organization`, ask for tokens no wider than needed:
+`GITHUB_APP_TOKEN_PERMISSIONS=organization_self_hosted_runners=write`.
+
+Status: both scopes are covered by tests against a fake GitHub server. Neither
+has run against github.com yet. Whether a free organization can use a custom
+runner group, rather than the default group, depends on the GitHub plan:
+confirm it in a test organization before relying on it.
 
 ## Webhook processing
 
@@ -171,5 +185,5 @@ Outcomes of `webhook_events_total`: `ok`, `failed`, `abandoned` (dropped at shut
   applied by the executable, which uses the client defaults.
 - ALB to task traffic is HTTP inside the VPC, not end-to-end TLS.
 
-Repository-level JIT also requires repository administration permission. See
-`docs/github-integration.md`.
+Repository-scope JIT also requires repository administration permission; use
+organization scope to avoid it (see "Where runners register").

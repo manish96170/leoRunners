@@ -30,7 +30,7 @@ first as the target experience, then the gaps they expose are built.
 - [x] 2.2g Generic AWS foundation environment (`terraform/environments/aws-foundation`) and shared gateway design note (`docs/aws-shared-gateway-design.md`).
 - [x] 2.1 GitHub App auth in the controller: App ID + installation ID + private key, short-lived installation tokens through the `BearerTokenSource` seam, with Terraform, Kubernetes and docs support (`docs/github-runtime-contract.md`). Tested against a fake GitHub server only.
 - [ ] 2.1a Exercise GitHub App auth against github.com with a disposable test repository.
-- [ ] 2.1b Move JIT to the organization-level endpoint (`POST /orgs/{org}/actions/runners/generate-jitconfig`) so the App needs the narrower organization Self-hosted runners permission instead of repository Administration.
+- [x] 2.1b Organization-level JIT (`GITHUB_RUNNER_SCOPE=organization`, Terraform `github.runner_scope`): the App needs the narrower organization Self-hosted runners permission instead of repository Administration. Fake-server tests only; not yet run against github.com.
 - [ ] 2.1c Serve several App installations from one controller (installation ID per event, allowlisted).
 - [ ] 2.1d Apply `GITHUB_JIT_REQUEST_TIMEOUT`, `GITHUB_REGISTRATION_TIMEOUT` and `GITHUB_REGISTRATION_POLL_INTERVAL` in the executable (currently validated but unused).
 - [x] 2.2h Modules validate on AWS provider v5 and v6 (region read by key; `validate-aws-modules.sh --provider-version`). Found by a customer composition on v5.
