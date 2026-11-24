@@ -11,7 +11,16 @@ FLOCI_CONTAINER=${LEO_FLOCI_CONTAINER:-leo-floci}
 FLOCI_IMAGE=${LEO_FLOCI_IMAGE:-floci/floci:latest}
 FLOCI_PORT=${LEO_FLOCI_PORT:-4566}
 CONTROLLER_PORT=${LEO_CONTROLLER_PORT:-18090}
-WEBHOOK_SECRET=${LEO_WEBHOOK_SECRET:-rehearsal-webhook-secret}
+# The webhook secret: LEO_WEBHOOK_SECRET, else the file $REHEARSAL_HOME/webhook-secret
+# (so it never has to be typed on a command line), else a public throwaway default
+# that is only fit for the local fake-GitHub stage.
+if [ -n "${LEO_WEBHOOK_SECRET:-}" ]; then
+  WEBHOOK_SECRET=$LEO_WEBHOOK_SECRET
+elif [ -s "$REHEARSAL_HOME/webhook-secret" ]; then
+  WEBHOOK_SECRET=$(tr -d '\r\n' < "$REHEARSAL_HOME/webhook-secret")
+else
+  WEBHOOK_SECRET=rehearsal-webhook-secret
+fi
 TABLE_NAME=${LEO_TABLE_NAME:-leo-rehearsal-state}
 LAUNCH_TEMPLATE_NAME=${LEO_LAUNCH_TEMPLATE_NAME:-leo-rehearsal-runner}
 # Floci runs instances as Docker containers. Emulated x86 on an Arm host is many
