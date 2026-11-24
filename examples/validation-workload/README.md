@@ -21,7 +21,7 @@ production one. It contains no secrets, no deployment, and no cloud account.
 | artifact upload and download keeping hidden files | `build` then `integration` |
 | a legacy, **amd64-only** Terraform (0.12.23) installed with a checksum | `integration` |
 | a temporary environment: init, apply, health check, destroy, and proof it is gone | `integration` (local state, no cloud) |
-| a headless browser test | `integration` (Cypress; `electron` by default, `chrome` if the image has it) |
+| a headless browser test | `integration` (Cypress with Chrome by default, so the image must provide it; `electron` is available but deprecated by Cypress) |
 | Docker | `integration`, when `LEO_REQUIRE_DOCKER` is `true` |
 | what the runner image provides | `scripts/report-environment.sh` writes versions, architecture, CPUs and free disk to the job summary |
 
@@ -35,7 +35,7 @@ GitHub-hosted runners (the fallback) or on LeoRunners without a commit:
 | Variable | Meaning |
 |---|---|
 | `LEO_RUNS_ON` | JSON array of runner labels, for example `["self-hosted","linux","x64","<your approved label>"]`. Unset: `ubuntu-latest`. |
-| `LEO_CYPRESS_BROWSER` | `electron` (default) or `chrome` |
+| `LEO_CYPRESS_BROWSER` | `chrome` (default) or `electron` |
 | `LEO_REQUIRE_DOCKER` | `true` to require a working Docker daemon |
 
 Run it once on `ubuntu-latest` first. If it fails there, the sample is wrong, not
