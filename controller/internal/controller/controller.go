@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/leo-runners/ci-platform/controller/internal/capacity"
 	"github.com/leo-runners/ci-platform/controller/internal/github"
@@ -107,7 +108,7 @@ func (s *Service) HandleWorkflowJob(ctx context.Context, event github.WorkflowJo
 			_ = s.Provider.Terminate(ctx, providers.RunnerInstance{ID: runner.ID, ProviderID: runner.ProviderInstanceID, Provider: runner.Provider})
 			return err
 		}
-		return s.Lifecycle.Transition(ctx, &job, state.JobAssigned)
+		return s.settleAssigned(ctx, job.ID)
 	case github.ActionInProgress:
 		stored, err := s.State.GetJob(ctx, event.JobKey)
 		if err != nil {
@@ -129,6 +130,36 @@ func (s *Service) HandleWorkflowJob(ctx context.Context, event github.WorkflowJo
 	}
 }
 
+// settleAssigned records that the job has a runner. The wait for the runner to
+// register takes minutes, during which the job record may have moved on (the
+// runner can start its job, or the job can end, before this point), so it reads
+// the job again instead of trusting the copy from before the wait. A job that is
+// already past provisioning is left as it is.
+func (s *Service) settleAssigned(ctx context.Context, jobID string) error {
+	const attempts = 5
+	for i := 0; i < attempts; i++ {
+		stored, err := s.State.GetJob(ctx, jobID)
+		if err != nil {
+			return err
+		}
+		if stored.State != state.JobProvisioning {
+			return nil
+		}
+		err = s.Lifecycle.Transition(ctx, &stored, state.JobAssigned)
+		if !errors.Is(err, state.ErrRevisionConflict) {
+			return err
+		}
+	}
+	return fmt.Errorf("job %s kept changing while it was being marked assigned: %w", jobID, state.ErrRevisionConflict)
+}
+
+// isTerminalJobState reports states a job never leaves. A late completed or
+// cancelled event for a job already failed (for example after its runner could
+// not be created) is expected, not an error.
+func isTerminalJobState(s state.JobState) bool {
+	return s == state.JobCompleted || s == state.JobCancelled || s == state.JobFailed
+}
+
 func boolInt(value bool) int {
 	if value {
 		return 1
@@ -141,12 +172,18 @@ func (s *Service) finish(ctx context.Context, jobID string, final state.JobState
 	if err != nil {
 		return err
 	}
-	if job.State != final {
+	if job.State != final && !isTerminalJobState(job.State) {
 		if err := s.Lifecycle.Transition(ctx, &job, final); err != nil {
 			return err
 		}
 	}
 	lease, err := s.State.GetLease(ctx, "lease-"+jobID)
+	if errors.Is(err, state.ErrNotFound) {
+		// The job ended while its runner was still being provisioned, so there
+		// is no lease yet. The job is now terminal; the reconciler removes the
+		// runner (and its record) once it appears.
+		return nil
+	}
 	if err != nil {
 		return err
 	}

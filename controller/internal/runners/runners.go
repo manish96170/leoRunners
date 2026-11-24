@@ -310,16 +310,55 @@ func (s *Service) Assign(ctx context.Context, request AssignmentRequest) (Assign
 		return cleanup(fmt.Errorf("%w: verifier returned unexpected runner identity", ErrRegistrationFailed))
 	}
 
-	runner.State = state.RunnerReady
-	if _, err = s.State.SaveRunner(ctx, runner, runner.Revision); err != nil {
+	current, err := s.markRunnerReady(ctx, runner.ID)
+	if err != nil {
 		return cleanup(fmt.Errorf("persist ready runner: %w", err))
 	}
+	runner = current
 	ready := pending
 	ready.State = RegistrationReady
 	if err = s.persistRegistration(ctx, ready, now().UTC()); err != nil {
 		return cleanup(fmt.Errorf("persist registered runner: %w", err))
 	}
 	return Assignment{Runner: runner, Registration: ready}, nil
+}
+
+// markRunnerReady moves the runner record to ready once GitHub has confirmed
+// the registration. The wait for GitHub can take minutes, and the reconciler
+// runs throughout it, so the record may already have moved on: reload it and act
+// on what is there instead of assuming the revision read earlier is current.
+//
+//   - provisioning: mark it ready, retrying if the record moves again;
+//   - ready or busy: nothing to do, and a runner already running its job is
+//     never demoted;
+//   - terminating, terminated, failed, unknown: the runner is gone, so fail and
+//     let the caller clean up.
+func (s *Service) markRunnerReady(ctx context.Context, runnerID string) (state.Runner, error) {
+	const attempts = 5
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		current, err := s.State.GetRunner(ctx, runnerID)
+		if err != nil {
+			return state.Runner{}, err
+		}
+		switch current.State {
+		case state.RunnerReady, state.RunnerBusy:
+			return current, nil
+		case state.RunnerProvisioning:
+			current.State = state.RunnerReady
+			saved, saveErr := s.State.SaveRunner(ctx, current, current.Revision)
+			if saveErr == nil {
+				return saved, nil
+			}
+			if !errors.Is(saveErr, state.ErrRevisionConflict) {
+				return state.Runner{}, saveErr
+			}
+			lastErr = saveErr
+		default:
+			return state.Runner{}, fmt.Errorf("runner %s is %s", runnerID, current.State)
+		}
+	}
+	return state.Runner{}, fmt.Errorf("runner %s kept changing while it was being marked ready: %w", runnerID, lastErr)
 }
 
 func (s *Service) beginAssignment(jobID string) bool {
