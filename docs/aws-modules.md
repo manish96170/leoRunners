@@ -38,6 +38,8 @@ resolves.
    `module.runner_layer.role_arn` to the reviewed task policy.
 4. Keep `max_runners` at its default of 1 until the first job and its cleanup
    are proven.
+5. After the first launch, run `tools/launch-check/check.sh` against the
+   instance and keep its output as evidence.
 
 The controller module rejects an enabled runner without user data (the
 bootstrap, with its JIT placeholder), a launch template, the role and profile,
