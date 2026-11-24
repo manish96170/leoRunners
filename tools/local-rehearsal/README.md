@@ -130,6 +130,15 @@ Expect: the delivery shows `202` in the App's "Advanced" delivery log, a runner
 container appears, registers, runs the job, and is removed when GitHub reports
 the job completed.
 
+A job runs in its own container with its own copy of the toolchain and
+dependency cache, so several jobs at once need real disk in the Docker VM:
+allow roughly 2 GB per concurrent job plus the base images. A job that fails
+with `ENOSPC` is the VM running out, not the workflow. Check with
+`docker run --rm alpine df -h /` and free unused volumes before a run.
+
+With the default repository scope the runner group ID is the Default group, `1`.
+An organization runner group ID only works with `GITHUB_RUNNER_SCOPE=organization`.
+
 Labels must match exactly. A job asking for a label the controller does not allow
 is rejected, and forks are denied by default.
 
