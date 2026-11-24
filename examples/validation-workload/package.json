@@ -1,0 +1,21 @@
+{
+  "name": "leo-runners-validation-workload",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A small workload that exercises what a real front-end repository asks of a CI runner.",
+  "scripts": {
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "lint": "biome check .",
+    "lint:custom": "node scripts/custom-lint.mjs",
+    "test": "vitest run",
+    "e2e": "cypress run"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8",
+    "cypress": "16.3.0",
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
+  }
+}

@@ -44,6 +44,8 @@ first as the target experience, then the gaps they expose are built.
 - [x] 2.5b Generic runner user-data template (`bootstrap/runner/user-data.sh`) with a pinned, checksum-verified runner download.
 - [x] 2.5e Reaper verified against the emulator; found and fixed two ways a runner could be orphaned (table TTL on the reaping deadline; no provider-side discovery). See `docs/aws-provider.md`.
 - [x] 2.5f `tools/launch-check`: read-only evidence check for a launched runner (public IP, IMDS, tags on instance and volumes, encryption, shutdown behaviour); offline-tested with a stub.
+- [x] 2.5g `examples/validation-workload`: a small front-end project and PR-only workflow that exercises what real repositories ask of a runner (exact Node, Yarn cache, lint shards, hidden-file artifacts, legacy amd64-only Terraform with teardown, Cypress, optional Docker). Static test only; not yet run on any runner.
+- [x] 2.5g `examples/validation-workload`: a small front-end project and PR-only workflow that exercises what real repositories ask of a runner (exact Node, Yarn cache, lint shards, hidden-file artifacts, legacy amd64-only Terraform with teardown, Cypress, optional Docker). Static test only; not yet run on any runner.
 - [ ] 2.5c Run a real workflow job through the rehearsal against a test repository (needs the GitHub App created in a browser).
 - [ ] 2.5d End-to-end smoke test against a disposable AWS account and test repo.
 

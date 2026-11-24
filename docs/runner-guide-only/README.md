@@ -141,7 +141,8 @@ for a repository the group does not include.
 ### 2b. Prove a representative workload in a sample repository
 
 Before any customer workflow is routed to LeoRunners, reproduce its
-requirements in a small sample repository that you own, using public stand-ins
+requirements in a small sample repository that you own (start from
+`examples/validation-workload`), using public stand-ins
 for the real tools: the same runtime and package-manager versions, the same
 infrastructure-tool version with a local backend, a headless browser test,
 Docker if needed, cache and artifact upload and download (including hidden
