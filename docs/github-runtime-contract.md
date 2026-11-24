@@ -182,10 +182,12 @@ Outcomes of `webhook_events_total`: `ok`, `failed`, `abandoned` (dropped at shut
   finished when the process dies is lost unless it is redelivered.
 - `GITHUB_API_BASE_URL` is passed to the client, which allows GitHub Enterprise
   Server, but that has not been tested against a real GHES instance.
-  `GITHUB_JIT_REQUEST_TIMEOUT` is applied to the App token request only;
-  the JIT client itself and the `GITHUB_REGISTRATION_TIMEOUT` and
-  `GITHUB_REGISTRATION_POLL_INTERVAL` settings are validated but not yet
-  applied by the executable, which uses the client defaults.
+- Timeouts: `GITHUB_JIT_REQUEST_TIMEOUT` (default 30s) bounds each GitHub API
+  request, `GITHUB_REGISTRATION_TIMEOUT` (default 10m) how long the controller
+  waits for a new runner to register, and `GITHUB_REGISTRATION_POLL_INTERVAL`
+  (default 5s) how often it asks. A slow image or a loaded machine needs a longer
+  registration wait: a runner that has not registered when it expires is
+  terminated and its job is failed.
 - ALB to task traffic is HTTP inside the VPC, not end-to-end TLS.
 
 Repository-scope JIT also requires repository administration permission; use

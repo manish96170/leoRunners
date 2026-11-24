@@ -114,6 +114,13 @@ func (s *Service) HandleWorkflowJob(ctx context.Context, event github.WorkflowJo
 		if err != nil {
 			return err
 		}
+		if isTerminalJobState(stored.State) {
+			// A job we already gave up on, or that already ended, can still
+			// report progress: GitHub starts jobs on any idle runner with
+			// matching labels, not only the one created for them. Nothing to
+			// record.
+			return nil
+		}
 		return s.Lifecycle.Transition(ctx, &stored, state.JobRunning)
 	case github.ActionCancelled:
 		return s.finish(ctx, event.JobKey, state.JobCancelled)
