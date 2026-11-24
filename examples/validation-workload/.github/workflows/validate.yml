@@ -8,7 +8,7 @@
 # Unset, it uses ubuntu-latest.
 #
 # Optional repository variables:
-#   LEO_CYPRESS_BROWSER  electron (default) or chrome
+#   LEO_CYPRESS_BROWSER  chrome (default) or electron
 #   LEO_REQUIRE_DOCKER   "true" to require a working Docker daemon
 name: validate
 
@@ -203,7 +203,7 @@ jobs:
           echo "::error::application did not become healthy"; cat "$RUNNER_TEMP/preview.log"; exit 1
       - name: Cypress
         env:
-          CYPRESS_BROWSER: ${{ vars.LEO_CYPRESS_BROWSER || 'electron' }}
+          CYPRESS_BROWSER: ${{ vars.LEO_CYPRESS_BROWSER || 'chrome' }}
         run: yarn cypress run --browser "$CYPRESS_BROWSER"
       - name: Stop the server
         if: always()
