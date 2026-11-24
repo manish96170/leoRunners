@@ -80,7 +80,8 @@ func TestReconcileExpiresJobAndLeaseBeforeCleaningRunner(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := state.Job{ID: "job-expired", State: state.JobRunning, ExpiresAt: now.Add(-time.Minute)}
-	runner := state.Runner{ID: instance.ID, JobID: job.ID, Provider: "fake", ProviderInstanceID: instance.ProviderID, State: state.RunnerReady, ExpiresAt: now.Add(time.Hour)}
+	// A runner is created with its job's expiry, so both lapse together.
+	runner := state.Runner{ID: instance.ID, JobID: job.ID, Provider: "fake", ProviderInstanceID: instance.ProviderID, State: state.RunnerReady, ExpiresAt: job.ExpiresAt}
 	lease := state.Lease{ID: "lease-expired", JobID: job.ID, RunnerID: runner.ID, State: state.LeaseActive, ExpiresAt: now.Add(-time.Minute)}
 	createRecords(t, repo, job, runner, lease)
 
@@ -409,4 +410,37 @@ func TestBackstopListFailureIsReportedWithoutBlockingOtherRepairs(t *testing.T) 
 		t.Fatalf("a failing list must be reported: %+v, %v", report, err)
 	}
 	assertRunnerState(t, repo, runner.ID, state.RunnerReady) // the ordinary repair still happened
+}
+
+// Runners are not bound to the job they were created for: GitHub gives a queued
+// job to any idle runner with matching labels. A finished job therefore says
+// nothing about its runner, which may be running another job right now.
+func TestReconcileDoesNotTerminateTheRunnerOfAFinishedJob(t *testing.T) {
+	for _, final := range []state.JobState{state.JobCompleted, state.JobCancelled, state.JobFailed} {
+		t.Run(string(final), func(t *testing.T) {
+			ctx := context.Background()
+			repo := state.NewMemoryRepository()
+			provider := providers.NewFakeProvider(providers.FakeConfig{})
+			now := time.Unix(2500, 0).UTC()
+			instance, err := provider.Provision(ctx, providers.RunnerSpec{ExpiresAt: now.Add(time.Hour)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := provider.SetStatus(instance.ID, providers.StatusReady); err != nil {
+				t.Fatal(err)
+			}
+			job := state.Job{ID: "job-done", State: final, ExpiresAt: now.Add(time.Hour)}
+			runner := state.Runner{ID: instance.ID, JobID: job.ID, Provider: "fake", ProviderInstanceID: instance.ProviderID, State: state.RunnerReady, ExpiresAt: now.Add(time.Hour)}
+			lease := state.Lease{ID: "lease-done", JobID: job.ID, RunnerID: runner.ID, State: state.LeaseActive, ExpiresAt: now.Add(time.Hour)}
+			createRecords(t, repo, job, runner, lease)
+
+			if _, err := (&Reconciler{State: repo, Provider: provider}).Reconcile(ctx, now); err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+			if provider.Active() != 1 {
+				t.Fatalf("active provider instances = %d: the runner of a %s job was terminated, but it may be running another job", provider.Active(), final)
+			}
+			assertRunnerState(t, repo, runner.ID, state.RunnerReady)
+		})
+	}
 }

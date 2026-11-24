@@ -138,6 +138,27 @@ has run against github.com yet. Whether a free organization can use a custom
 runner group, rather than the default group, depends on the GitHub plan:
 confirm it in a test organization before relying on it.
 
+## Runners are interchangeable
+
+The controller creates one runner for each queued job, but GitHub does not tie
+them together: any idle runner whose labels match takes the next queued job. The
+runner created for job A may well run job B (the first live run showed exactly
+this). Two consequences are built in:
+
+- **A finished job retires only the runner that ran it.** The `completed` and
+  `cancelled` webhooks name that runner (`runner_name`), and the controller
+  recognises its own names (`<prefix>-<job number>-<attempt>`). A job that ended
+  without ever running (cancelled while queued) names no runner and retires
+  none. A runner it did not create is never touched.
+- **The reconciler never terminates a runner because its job ended.** A runner
+  ends itself after one job; one that never gets a job, or never ends, is removed
+  when its lifetime (`RUNNER_MAX_LIFETIME`) expires, by the expiry reaper and the
+  provider-side backstop.
+
+The cost of the second rule is that a runner created for a job cancelled while
+queued waits, idle, for another job or for its lifetime. Keep the lifetime
+short enough that this is acceptable.
+
 ## Webhook processing
 
 The endpoint verifies the signature, validates the payload, queues the event,

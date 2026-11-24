@@ -16,7 +16,7 @@ func TestCompletedEventTerminatesRunner(t *testing.T) {
 	if err := svc.HandleWorkflowJob(context.Background(), queued); err != nil {
 		t.Fatal(err)
 	}
-	completed := workflowEvent(t, `{"action":"completed","workflow_job":{"id":10,"run_id":20,"run_attempt":1,"workflow_name":"build","conclusion":"success","repository":{"full_name":"acme/repo"}}}`, "delivery-completed")
+	completed := workflowEvent(t, `{"action":"completed","workflow_job":{"id":10,"run_id":20,"run_attempt":1,"workflow_name":"build","conclusion":"success","runner_name":"leo-runner-10-1","repository":{"full_name":"acme/repo"}}}`, "delivery-completed")
 	if err := svc.HandleWorkflowJob(context.Background(), completed); err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestCancelledEventTerminatesRunnerAndUpdatesState(t *testing.T) {
 	if err := svc.HandleWorkflowJob(context.Background(), queued); err != nil {
 		t.Fatal(err)
 	}
-	cancelled := workflowEvent(t, `{"action":"cancelled","workflow_job":{"id":11,"run_id":21,"run_attempt":1,"workflow_name":"build","repository":{"full_name":"acme/repo"}}}`, "cancel-event")
+	cancelled := workflowEvent(t, `{"action":"cancelled","workflow_job":{"id":11,"run_id":21,"run_attempt":1,"workflow_name":"build","runner_name":"leo-runner-11-1","repository":{"full_name":"acme/repo"}}}`, "cancel-event")
 	if err := svc.HandleWorkflowJob(context.Background(), cancelled); err != nil {
 		t.Fatal(err)
 	}

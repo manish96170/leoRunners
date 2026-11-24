@@ -190,29 +190,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, now time.Time) (Report, erro
 			report.JobsRepaired++
 		}
 		if isTerminalJob(job.State) {
-			// Terminal jobs must not retain live provider resources. Cleanup is
-			// bounded and retried on the next pass if it fails.
-			var runner state.Runner
-			var hasRunner bool
-			if hasLease {
-				runner, hasRunner = runnerByID[lease.RunnerID]
-			} else {
-				for _, candidate := range runnerByID {
-					if candidate.JobID == id {
-						runner, hasRunner = candidate, true
-						break
-					}
-				}
-			}
-			if hasRunner && runner.State != state.RunnerTerminated {
-				cleaned, cleanErr := r.terminateRunner(ctx, runner)
-				if cleanErr != nil {
-					report.ProviderErrors++
-					report.addError(fmt.Errorf("cleanup terminal job %s runner %s: %w", id, runner.ID, cleanErr))
-				} else {
-					runnerByID[runner.ID] = cleaned
-				}
-			}
+			// A finished job says nothing about the runner that was created for
+			// it. Runners are not bound to jobs: GitHub hands a queued job to any
+			// idle runner with matching labels, so that runner may be running a
+			// different job right now, and terminating it would kill that job.
+			// Runners end themselves after one job (they are ephemeral); one that
+			// does not is removed when its lifetime expires, by the expiry reaper
+			// and the provider-side backstop. The webhook for the job that ended
+			// names the runner that actually ran it, and that one is retired
+			// there.
 			continue
 		}
 		if !hasLease && (job.State == state.JobAssigned || job.State == state.JobRunning) {
