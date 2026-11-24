@@ -12,6 +12,8 @@ import (
 	"github.com/leo-runners/ci-platform/controller/internal/scheduler"
 	"github.com/leo-runners/ci-platform/controller/internal/state"
 	"github.com/leo-runners/ci-platform/controller/internal/telemetry"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -123,7 +125,7 @@ func (s *Service) HandleWorkflowJob(ctx context.Context, event github.WorkflowJo
 		}
 		return s.Lifecycle.Transition(ctx, &stored, state.JobRunning)
 	case github.ActionCancelled:
-		return s.finish(ctx, event.JobKey, state.JobCancelled)
+		return s.finishAndRetire(ctx, event, state.JobCancelled)
 	case github.ActionCompleted:
 		conclusion := state.JobCompleted
 		if event.Job.Conclusion == "cancelled" || event.Job.Conclusion == "skipped" {
@@ -131,7 +133,7 @@ func (s *Service) HandleWorkflowJob(ctx context.Context, event github.WorkflowJo
 		} else if event.Job.Conclusion != "success" {
 			conclusion = state.JobFailed
 		}
-		return s.finish(ctx, event.JobKey, conclusion)
+		return s.finishAndRetire(ctx, event, conclusion)
 	default:
 		return nil
 	}
@@ -174,6 +176,16 @@ func boolInt(value bool) int {
 	return 0
 }
 
+// finishAndRetire records the end of a job and retires the runner that ran it.
+func (s *Service) finishAndRetire(ctx context.Context, event github.WorkflowJobEvent, final state.JobState) error {
+	if err := s.finish(ctx, event.JobKey, final); err != nil {
+		return err
+	}
+	return s.retireRunnerThatRan(ctx, event)
+}
+
+// finish records the end of a job. It does not touch any runner: runners are
+// not tied to the job they were created for (see retireRunnerThatRan).
 func (s *Service) finish(ctx context.Context, jobID string, final state.JobState) error {
 	job, err := s.State.GetJob(ctx, jobID)
 	if err != nil {
@@ -184,11 +196,29 @@ func (s *Service) finish(ctx context.Context, jobID string, final state.JobState
 			return err
 		}
 	}
-	lease, err := s.State.GetLease(ctx, "lease-"+jobID)
+	return nil
+}
+
+// retireRunnerThatRan terminates the runner GitHub reports as having run the
+// job, and only that one.
+//
+// A runner is created for each queued job, but GitHub does not bind them: any
+// idle runner whose labels match takes the next queued job. The runner created
+// for job A may therefore run job B, and A's completion says nothing about it.
+// Terminating "A's runner" when A ends killed B mid-run in a live test. The
+// webhook names the runner that ran the job, and the runner's name carries the
+// job number it was created for, which leads back to its record.
+//
+// A job that ends without ever running (cancelled while queued) names no runner.
+// Its own runner is left alone: it stays available for the next queued job, and
+// is removed by its lifetime if none comes.
+func (s *Service) retireRunnerThatRan(ctx context.Context, event github.WorkflowJobEvent) error {
+	jobNumber, ok := s.createdForJobNumber(event.Job.RunnerName)
+	if !ok {
+		return nil
+	}
+	lease, err := s.leaseOfRunnerCreatedFor(ctx, event.Job.Repository.FullName, jobNumber)
 	if errors.Is(err, state.ErrNotFound) {
-		// The job ended while its runner was still being provisioned, so there
-		// is no lease yet. The job is now terminal; the reconciler removes the
-		// runner (and its record) once it appears.
 		return nil
 	}
 	if err != nil {
@@ -200,9 +230,9 @@ func (s *Service) finish(ctx context.Context, jobID string, final state.JobState
 	}
 	provider := s.Provider
 	if s.Providers != nil {
-		var ok bool
-		provider, ok = s.Providers[runner.Provider]
-		if !ok || provider == nil {
+		var found bool
+		provider, found = s.Providers[runner.Provider]
+		if !found || provider == nil {
 			return fmt.Errorf("provider %q is not configured for runner cleanup", runner.Provider)
 		}
 	}
@@ -219,4 +249,53 @@ func (s *Service) finish(ctx context.Context, jobID string, final state.JobState
 	lease.State = state.LeaseTerminated
 	_, err = s.State.SaveLease(ctx, lease, lease.Revision)
 	return err
+}
+
+// createdForJobNumber extracts the job number from one of our runner names,
+// "<prefix>-<job number>-<attempt>". It reports false for any other name, so a
+// runner the controller did not create is never touched.
+func (s *Service) createdForJobNumber(name string) (int64, bool) {
+	prefix := s.RunnerNamePrefix
+	if prefix == "" {
+		prefix = "leo-runner"
+	}
+	rest, found := strings.CutPrefix(strings.TrimSpace(name), prefix+"-")
+	if !found {
+		return 0, false
+	}
+	parts := strings.Split(rest, "-")
+	if len(parts) != 2 {
+		return 0, false
+	}
+	number, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || number <= 0 {
+		return 0, false
+	}
+	if attempt, err := strconv.Atoi(parts[1]); err != nil || attempt <= 0 {
+		return 0, false
+	}
+	return number, true
+}
+
+// leaseOfRunnerCreatedFor finds the lease of the job a runner was created for.
+// The runner usually serves a job of the same repository, so that key is tried
+// first. Organization-level runners are shared by every repository in their
+// group and can serve another repository's job, so it falls back to a search by
+// the job number, which GitHub makes unique.
+func (s *Service) leaseOfRunnerCreatedFor(ctx context.Context, repository string, jobNumber int64) (state.Lease, error) {
+	lease, err := s.State.GetLease(ctx, fmt.Sprintf("lease-%s/job/%d", repository, jobNumber))
+	if !errors.Is(err, state.ErrNotFound) {
+		return lease, err
+	}
+	leases, listErr := s.State.ListLeases(ctx)
+	if listErr != nil {
+		return state.Lease{}, listErr
+	}
+	suffix := fmt.Sprintf("/job/%d", jobNumber)
+	for _, candidate := range leases {
+		if strings.HasSuffix(candidate.JobID, suffix) {
+			return candidate, nil
+		}
+	}
+	return state.Lease{}, state.ErrNotFound
 }
