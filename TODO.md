@@ -29,7 +29,7 @@ first as the target experience, then the gaps they expose are built.
 - [x] 2.2b Module docs: `docs/aws-modules.md`, image publication, IAM policy workflow, state and secrets, rollback and cleanup, GitHub runtime contract.
 - [x] 2.2g Generic AWS foundation environment (`terraform/environments/aws-foundation`) and shared gateway design note (`docs/aws-shared-gateway-design.md`).
 - [x] 2.1 GitHub App auth in the controller: App ID + installation ID + private key, short-lived installation tokens through the `BearerTokenSource` seam, with Terraform, Kubernetes and docs support (`docs/github-runtime-contract.md`). Tested against a fake GitHub server only.
-- [ ] 2.1a Exercise GitHub App auth against github.com with a disposable test repository.
+- [x] 2.1a GitHub App auth exercised against github.com: installation tokens minted from the stored key, JIT runners created and registered, jobs run on them (local rehearsal against a throwaway repository, repository scope).
 - [x] 2.1b Organization-level JIT (`GITHUB_RUNNER_SCOPE=organization`, Terraform `github.runner_scope`): the App needs the narrower organization Self-hosted runners permission instead of repository Administration. Fake-server tests only; not yet run against github.com.
 - [ ] 2.1c Serve several App installations from one controller (installation ID per event, allowlisted).
 - [x] 2.1d `GITHUB_JIT_REQUEST_TIMEOUT`, `GITHUB_REGISTRATION_TIMEOUT` and `GITHUB_REGISTRATION_POLL_INTERVAL` are applied by the executable. Found on the first real run, where a loaded local machine needed more than the fixed 10 minute registration wait.
@@ -46,7 +46,10 @@ first as the target experience, then the gaps they expose are built.
 - [x] 2.5f `tools/launch-check`: read-only evidence check for a launched runner (public IP, IMDS, tags on instance and volumes, encryption, shutdown behaviour); offline-tested with a stub.
 - [x] 2.5g `examples/validation-workload`: a small front-end project and PR-only workflow that exercises what real repositories ask of a runner (exact Node, Yarn cache, lint shards, hidden-file artifacts, legacy amd64-only Terraform with teardown, Cypress, optional Docker). Static test only; not yet run on any runner.
 - [x] 2.5g `examples/validation-workload`: a small front-end project and PR-only workflow that exercises what real repositories ask of a runner (exact Node, Yarn cache, lint shards, hidden-file artifacts, legacy amd64-only Terraform with teardown, Cypress, optional Docker). Static test only; not yet run on any runner.
-- [ ] 2.5c Run a real workflow job through the rehearsal against a test repository (needs the GitHub App created in a browser).
+- [x] 2.5c A real workflow ran on LeoRunners runners from the local rehearsal: lint (exact Node 26.8.2, Yarn cache, actionlint, Biome, custom lint), both unit shards, and a build with a hidden-file artifact all passed on controller-launched runners. Found and fixed six defects on the way (PRs #15-#20). The integration job (legacy Terraform, Cypress, teardown) did not run: it needs real x64 hardware (2.5i).
+- [ ] 2.5h Restrict the minted installation token to the allowlisted repositories (`repositories` in the token request). The App used in the live run is installed on a second, unrelated repository, so a token can currently reach more than the controller will ever use.
+- [ ] 2.5i Run the integration job (legacy amd64-only Terraform, Cypress on Chrome, Docker, temporary environment and teardown) on a real x64 EC2 runner. The emulator's arm64 containers cannot run it and boot too slowly to be a fair test.
+- [ ] 2.5j Release idle runners sooner: a runner created for a job cancelled while queued now waits for another job or for its lifetime, because runners are interchangeable and the controller no longer terminates the runner "belonging" to a finished job.
 - [ ] 2.5d End-to-end smoke test against a disposable AWS account and test repo.
 
 ### 3. Validate and correct

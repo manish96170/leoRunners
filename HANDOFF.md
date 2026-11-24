@@ -105,6 +105,31 @@ it once caught a flaky hang in a test.
 - Override the webhook secret with `LEO_WEBHOOK_SECRET` (not `WEBHOOK_SECRET`).
 - The shell tool rejects some dynamic quoting; put complex logic in a script file.
 
+### First live run (2026-11-24/25)
+
+A throwaway repository in a test organization ran a PR-only validation workload
+(`examples/validation-workload`) on runners launched by the local rehearsal
+(floci plus a Cloudflare quick tunnel), using a real GitHub App. Four jobs
+(lint, two unit shards, build with a hidden-file artifact) passed on
+controller-launched runners. The first runs found these defects, all fixed:
+
+- the registration wait raced the reconciler and the controller terminated
+  healthy runners mid-job (state revision conflict) (#16);
+- `libatomic` was missing from the base image, so Node exited 127 (#17);
+- GitHub's `ping` was answered 400 (#15);
+- a repository-level runner can only join the Default group, so an organization
+  group ID gave 404 (#18);
+- the registration timeout and poll interval were validated but never applied,
+  and a slow start was cut off at ten minutes (#19);
+- runners are interchangeable: GitHub gives a job to any idle runner with
+  matching labels, and the controller (and reconciler) terminated the runner
+  created for a finished job even when it was running another one (#20).
+
+Not yet proven: the integration job on real x64 hardware, anything on real EC2
+or DynamoDB, and the organization-scope path against github.com (the App used
+has no organization permission). The emulator boots four runners slowly and
+needs about 15 GB free in the Docker VM; see `tools/local-rehearsal/README.md`.
+
 ### Next steps, in order
 
 1. **Apply feedback** from the infra-repo session if there is any (a module gap,
