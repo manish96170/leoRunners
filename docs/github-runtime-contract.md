@@ -117,11 +117,14 @@ endpoint the controller uses to create and look up runners.
 | Creates runners with | `POST /repos/{owner}/{repo}/actions/runners/generate-jitconfig` | `POST /orgs/{org}/actions/runners/generate-jitconfig` |
 | Looks runners up with | `GET /repos/{owner}/{repo}/actions/runners` | `GET /orgs/{org}/actions/runners` |
 | App permission needed | repository **Administration: read and write** (a broad grant: it includes full repository administration) | organization **Self-hosted runners: read and write** |
-| `GITHUB_RUNNER_GROUP_ID` | any group the repository can use | an **organization** runner group |
+| `GITHUB_RUNNER_GROUP_ID` | **must be the Default group (ID 1)**: GitHub registers a repository-level runner in the Default group only, and answers 404 for any other group ID (observed on the first real run) | an **organization** runner group |
 | Who decides which repositories may use the runner | the controller allowlists only | the controller allowlists **and** the runner group's repository access on GitHub |
 
 Prefer `organization`: it needs a much narrower grant, and the runner group
 adds a second, independent limit on which repositories can reach the runners.
+With `repository` scope there is no such group-level limit: the runner exists
+only on the repository it was created for, and the controller's allowlists are
+the only restriction on which repositories get runners.
 The controller's own allowlists (`GITHUB_ALLOWED_ORGANIZATIONS`,
 `GITHUB_ALLOWED_REPOSITORIES`, labels, forks) apply in both scopes. Webhooks
 still identify the repository; the organization is taken from the repository
