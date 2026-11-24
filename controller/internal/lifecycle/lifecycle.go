@@ -45,7 +45,9 @@ func validTransition(from, to state.JobState) bool {
 	case state.JobQueued:
 		return to == state.JobProvisioning || to == state.JobCancelled || to == state.JobCompleted || to == state.JobFailed
 	case state.JobProvisioning:
-		return to == state.JobAssigned || to == state.JobFailed || to == state.JobCancelled || to == state.JobCompleted
+		// A runner can take its job before the controller has seen it register,
+		// so the first sign of progress may arrive while still provisioning.
+		return to == state.JobAssigned || to == state.JobRunning || to == state.JobFailed || to == state.JobCancelled || to == state.JobCompleted
 	case state.JobAssigned:
 		return to == state.JobRunning || to == state.JobFailed || to == state.JobCancelled || to == state.JobCompleted
 	case state.JobRunning:

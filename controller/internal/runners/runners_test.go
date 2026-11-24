@@ -286,3 +286,100 @@ func TestAssignDoesNotCallProviderWhenJITGenerationFails(t *testing.T) {
 		t.Fatalf("error = %v, active = %d", err, provider.Active())
 	}
 }
+
+// advancingRegistration stands in for the real wait: while the controller is
+// waiting for GitHub, the reconciler (running every few seconds in the real
+// process) may already have moved the runner record forward.
+type advancingRegistration struct {
+	fakeRegistration
+	repo   *state.MemoryRepository
+	mutate func(*state.Runner)
+}
+
+func (a *advancingRegistration) WaitForRegistration(ctx context.Context, request RegistrationRequest) (GitHubRunner, error) {
+	all, err := a.repo.ListRunners(ctx)
+	if err != nil || len(all) != 1 {
+		return GitHubRunner{}, errors.New("test setup: expected exactly one persisted runner")
+	}
+	runner := all[0]
+	a.mutate(&runner)
+	if _, err := a.repo.SaveRunner(ctx, runner, runner.Revision); err != nil {
+		return GitHubRunner{}, err
+	}
+	return a.fakeRegistration.WaitForRegistration(ctx, request)
+}
+
+func advancingService(t *testing.T, mutate func(*state.Runner)) (*Service, *providers.FakeProvider, *state.MemoryRepository) {
+	t.Helper()
+	jit := &fakeJIT{config: JITConfig{EncodedConfig: "encoded", RunnerID: 9, RunnerName: "runner-9"}}
+	repo := state.NewMemoryRepository()
+	provider := providers.NewFakeProvider(providers.FakeConfig{})
+	registration := &advancingRegistration{fakeRegistration: fakeRegistration{runner: GitHubRunner{ID: 9, Name: "runner-9"}}, repo: repo, mutate: mutate}
+	return &Service{State: repo, Provider: provider, JIT: jit, Registration: registration, Now: func() time.Time { return time.Unix(100, 0) }}, provider, repo
+}
+
+func assign(t *testing.T, s *Service) (Assignment, error) {
+	t.Helper()
+	return s.Assign(context.Background(), AssignmentRequest{Job: testJob(), Spec: providers.RunnerSpec{Labels: []string{"linux"}, ExpiresAt: time.Unix(200, 0)}})
+}
+
+// The reconciler marking a provisioning runner ready while the assignment is
+// still waiting for GitHub must not fail the assignment: the runner is exactly
+// where the assignment wanted it.
+func TestAssignSucceedsWhenTheReconcilerAlreadyMarkedTheRunnerReady(t *testing.T) {
+	service, provider, repo := advancingService(t, func(r *state.Runner) { r.State = state.RunnerReady })
+	assignment, err := assign(t, service)
+	if err != nil {
+		t.Fatalf("Assign() error = %v, want success", err)
+	}
+	if assignment.Runner.State != state.RunnerReady {
+		t.Fatalf("assignment runner state = %s, want ready", assignment.Runner.State)
+	}
+	stored, _ := repo.ListRunners(context.Background())
+	if len(stored) != 1 || stored[0].State != state.RunnerReady {
+		t.Fatalf("stored runners = %+v", stored)
+	}
+	if provider.Active() != 1 {
+		t.Fatal("a healthy runner must not be terminated")
+	}
+}
+
+// A bump that changes nothing important (for example a refreshed timestamp or
+// label) still moves the revision. The assignment must reload and finish.
+func TestAssignSucceedsWhenTheRecordWasOnlyTouched(t *testing.T) {
+	service, _, _ := advancingService(t, func(r *state.Runner) { r.CPU = 2 })
+	assignment, err := assign(t, service)
+	if err != nil {
+		t.Fatalf("Assign() error = %v, want success", err)
+	}
+	if assignment.Runner.State != state.RunnerReady {
+		t.Fatalf("assignment runner state = %s, want ready", assignment.Runner.State)
+	}
+}
+
+func TestAssignKeepsABusyRunnerBusy(t *testing.T) {
+	service, _, repo := advancingService(t, func(r *state.Runner) { r.State = state.RunnerBusy })
+	if _, err := assign(t, service); err != nil {
+		t.Fatalf("Assign() error = %v, want success", err)
+	}
+	stored, _ := repo.ListRunners(context.Background())
+	if stored[0].State != state.RunnerBusy {
+		t.Fatalf("a runner already running its job was demoted to %s", stored[0].State)
+	}
+}
+
+// If the runner was meanwhile declared dead, the assignment must fail and
+// clean up rather than hand back a runner that is gone.
+func TestAssignFailsAndCleansUpWhenTheRunnerWasTerminatedMeanwhile(t *testing.T) {
+	for _, dead := range []state.RunnerState{state.RunnerTerminating, state.RunnerTerminated, state.RunnerFailed, state.RunnerUnknown} {
+		t.Run(string(dead), func(t *testing.T) {
+			service, provider, _ := advancingService(t, func(r *state.Runner) { r.State = dead })
+			if _, err := assign(t, service); err == nil || !strings.Contains(err.Error(), string(dead)) {
+				t.Fatalf("Assign() error = %v, want a failure naming %s", err, dead)
+			}
+			if provider.Active() != 0 {
+				t.Fatal("the instance must be terminated when the assignment fails")
+			}
+		})
+	}
+}
