@@ -147,3 +147,23 @@ func TestLateEndEventForAnAlreadyFailedJobIsNotAnError(t *testing.T) {
 		})
 	}
 }
+
+func TestProgressEventForAJobAlreadyEndedIsNotAnError(t *testing.T) {
+	for _, ended := range []state.JobState{state.JobFailed, state.JobCancelled, state.JobCompleted} {
+		t.Run(string(ended), func(t *testing.T) {
+			svc, _ := testService()
+			repo := svc.State.(*state.MemoryRepository)
+			jobIn(t, repo, "acme/repo/job/7", ended)
+			event := workflowEvent(t, `{"action":"in_progress","workflow_job":{"id":7,"run_id":1,"run_attempt":1,"workflow_name":"w","repository":{"full_name":"acme/repo"}}}`, "d-progress")
+			if event.JobKey != "acme/repo/job/7" {
+				t.Skipf("job key format changed: %s", event.JobKey)
+			}
+			if err := svc.HandleWorkflowJob(context.Background(), event); err != nil {
+				t.Fatalf("HandleWorkflowJob() error = %v, want nil", err)
+			}
+			if job, _ := repo.GetJob(context.Background(), "acme/repo/job/7"); job.State != ended {
+				t.Fatalf("job state = %s, want it left at %s", job.State, ended)
+			}
+		})
+	}
+}

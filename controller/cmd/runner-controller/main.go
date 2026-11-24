@@ -308,12 +308,12 @@ func configureGitHubAssignment(service *controller.Service, repository state.Rep
 	if err != nil {
 		log.Fatal(err)
 	}
-	client, err := github.NewJITClient(github.JITClientConfig{BaseURL: jit.APIBaseURL, TokenSource: tokenSource})
+	client, err := github.NewJITClient(jitClientConfig(jit, tokenSource))
 	if err != nil {
 		log.Fatal(err)
 	}
 	warmGitHubTokenSource(tokenSource, jit)
-	verifier, err := github.NewRegistrationVerifier(client, github.RegistrationVerifierConfig{})
+	verifier, err := github.NewRegistrationVerifier(client, registrationVerifierConfig(jit))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -323,6 +323,19 @@ func configureGitHubAssignment(service *controller.Service, repository state.Rep
 	}
 	service.ScopePolicy = &scope
 	service.Assignment = &runners.Service{State: repository, Provider: provider, JIT: controller.GitHubJITAdapter{Client: client, Organization: orgScope}, Registration: controller.GitHubRegistrationAdapter{Verifier: verifier, Organization: orgScope}, RunnerGroupID: &groupID, Policy: runners.AssignmentPolicy{Organizations: append([]string(nil), scope.Organizations...), Repositories: append([]string(nil), scope.Repositories...), AllowedLabels: append([]string(nil), scope.AllowedLabels...), RunnerGroupID: groupID, AllowForks: scope.AllowForks}}
+}
+
+// jitClientConfig applies the configured GitHub API request timeout. The same
+// value bounds the App token request (see newGitHubTokenSource).
+func jitClientConfig(jit runtimeconfig.GitHubJITConfig, tokens github.BearerTokenSource) github.JITClientConfig {
+	return github.JITClientConfig{BaseURL: jit.APIBaseURL, TokenSource: tokens, Timeout: jit.RequestTimeout}
+}
+
+// registrationVerifierConfig applies how long the controller waits for a new
+// runner to register, and how often it asks GitHub. A slow image or a loaded
+// machine needs a longer wait than the 10 minute default.
+func registrationVerifierConfig(jit runtimeconfig.GitHubJITConfig) github.RegistrationVerifierConfig {
+	return github.RegistrationVerifierConfig{Timeout: jit.RegistrationTimeout, Interval: jit.PollInterval}
 }
 
 // runnerLifetime is the configured hard runner lifetime, or the default when
