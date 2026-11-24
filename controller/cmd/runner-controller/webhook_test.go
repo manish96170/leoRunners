@@ -145,3 +145,62 @@ func TestWebhookRejectsOversizedBody(t *testing.T) {
 type submitFunc func(github.WorkflowJobEvent) error
 
 func (f submitFunc) Submit(event github.WorkflowJobEvent) error { return f(event) }
+
+func signedEvent(t *testing.T, event, body string) *http.Request {
+	t.Helper()
+	request := signedRequest(t, body, testSecret)
+	request.Header.Set("X-GitHub-Event", event)
+	return request
+}
+
+func TestWebhookAnswersAPingWithoutQueueing(t *testing.T) {
+	var submitted atomic.Int64
+	handler := newWebhookHandler(testSecret, 1<<20, submitFunc(func(github.WorkflowJobEvent) error { submitted.Add(1); return nil }), nil)
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, signedEvent(t, "ping", `{"zen":"Keep it logically awesome.","hook_id":1}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("ping status = %d, want 200", recorder.Code)
+	}
+	if submitted.Load() != 0 {
+		t.Fatal("a ping must never be queued")
+	}
+}
+
+func TestWebhookAcknowledgesAndDropsOtherSignedEvents(t *testing.T) {
+	var submitted atomic.Int64
+	handler := newWebhookHandler(testSecret, 1<<20, submitFunc(func(github.WorkflowJobEvent) error { submitted.Add(1); return nil }), nil)
+
+	for _, event := range []string{"installation", "workflow_run", "push", ""} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, signedEvent(t, event, `{"action":"created"}`))
+		if recorder.Code != http.StatusAccepted {
+			t.Errorf("event %q status = %d, want 202", event, recorder.Code)
+		}
+	}
+	if submitted.Load() != 0 {
+		t.Fatal("events other than workflow_job must never be queued")
+	}
+}
+
+func TestWebhookStillAuthenticatesBeforeAcknowledgingAnyEvent(t *testing.T) {
+	handler := newWebhookHandler(testSecret, 1<<20, submitFunc(func(github.WorkflowJobEvent) error { return nil }), nil)
+	for _, event := range []string{"ping", "installation", "workflow_job"} {
+		request := signedEvent(t, event, `{"zen":"x"}`)
+		request.Header.Set("X-Hub-Signature-256", "sha256=0000000000000000000000000000000000000000000000000000000000000000")
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusUnauthorized {
+			t.Errorf("event %q with a bad signature = %d, want 401", event, recorder.Code)
+		}
+	}
+}
+
+func TestWebhookStillRejectsAMalformedWorkflowJob(t *testing.T) {
+	handler := newWebhookHandler(testSecret, 1<<20, submitFunc(func(github.WorkflowJobEvent) error { return nil }), nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, signedEvent(t, "workflow_job", `{"action":"queued"}`))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("malformed workflow_job = %d, want 400", recorder.Code)
+	}
+}
