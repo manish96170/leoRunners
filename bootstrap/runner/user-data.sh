@@ -100,6 +100,25 @@ if ! command -v git >/dev/null 2>&1; then
   fi
 fi
 
+# Prerequisites most workflows hit on a bare image: unzip (release archives) and
+# libatomic, which the Node.js builds that actions/setup-node downloads link
+# against on arm64. A missing libatomic shows up as exit code 127 when the job
+# tries to run node. Production images should carry both (ami/scripts).
+ensure_workload_prerequisites() {
+  local pkgs=()
+  command -v unzip >/dev/null 2>&1 || pkgs+=(unzip)
+  if ! ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1'; then
+    if command -v apt-get >/dev/null 2>&1; then pkgs+=(libatomic1); else pkgs+=(libatomic); fi
+  fi
+  [ "${#pkgs[@]}" -eq 0 ] && return 0
+  log "installing workload prerequisites: ${pkgs[*]}"
+  if command -v dnf >/dev/null 2>&1; then dnf install -y "${pkgs[@]}"
+  elif command -v yum >/dev/null 2>&1; then yum install -y "${pkgs[@]}"
+  elif command -v apt-get >/dev/null 2>&1; then apt-get install -y --no-install-recommends "${pkgs[@]}"
+  fi
+}
+ensure_workload_prerequisites
+
 id -u "$RUNNER_USER" >/dev/null 2>&1 || useradd --create-home --shell /bin/bash "$RUNNER_USER"
 chown -R "$RUNNER_USER" "$RUNNER_HOME"
 

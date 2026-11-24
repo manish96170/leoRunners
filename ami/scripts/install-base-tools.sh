@@ -22,6 +22,7 @@ dnf install -y \
   git \
   gzip \
   jq \
+  libatomic \
   make \
   openssl \
   tar \
