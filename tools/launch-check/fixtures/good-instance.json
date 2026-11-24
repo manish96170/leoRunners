@@ -1,0 +1,14 @@
+{"Reservations":[{"Instances":[{
+  "InstanceId":"i-0123456789abcdef0",
+  "State":{"Name":"running"},
+  "MetadataOptions":{"HttpTokens":"required","HttpEndpoint":"enabled","HttpPutResponseHopLimit":1,"InstanceMetadataTags":"disabled"},
+  "NetworkInterfaces":[{"NetworkInterfaceId":"eni-0123456789abcdef0","Attachment":{"DeleteOnTermination":true}}],
+  "IamInstanceProfile":{"Arn":"arn:aws:iam::111122223333:instance-profile/example-runner"},
+  "BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"VolumeId":"vol-0123456789abcdef0"}}],
+  "Tags":[
+    {"Key":"leo-runners:managed-by","Value":"leo-runners"},
+    {"Key":"leo-runners:runner-id","Value":"runner-1"},
+    {"Key":"leo-runners:expires-at","Value":"2030-01-01T02:00:00Z"},
+    {"Key":"RequestId","Value":"req-1"},
+    {"Key":"aws:ec2launchtemplate:id","Value":"lt-0123456789abcdef0"}
+  ]}]}]}

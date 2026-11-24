@@ -142,7 +142,9 @@ profile, not in this module.
 
 ## Known limits
 
-- Not yet run on real EC2. Things to confirm on the first real launch: the
+- Not yet run on real EC2. `tools/launch-check/check.sh --instance-id ...` makes
+  the checks below on a launched instance and prints evidence. Things to
+  confirm on the first real launch: the
   launch succeeds with the template's network interface and no subnet in the
   request; the instance and volume carry `leo-runners:managed-by`,
   `leo-runners:runner-id` and your `RequestId`; the instance has no public IP;

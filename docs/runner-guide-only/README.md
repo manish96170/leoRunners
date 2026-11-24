@@ -167,8 +167,9 @@ provide, at minimum:
 - a request-specific cleanup deadline and rollback procedure.
 
 Before applying, review the infrastructure plan for dedicated resources only.
-After applying, run a single disposable smoke test and prove scoped cleanup by
-exact ownership-tag intersection, never by name or network location.
+After applying, run a single disposable smoke test, check the launched
+instance with `tools/launch-check/check.sh`, and prove scoped cleanup by exact
+ownership-tag intersection, never by name or network location.
 
 ### 4. Complete follow-up work and release
 
