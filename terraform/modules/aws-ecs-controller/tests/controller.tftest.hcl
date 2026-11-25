@@ -848,3 +848,67 @@ run "runner_cap_and_lifetime_are_bounded" {
 
   expect_failures = [var.runner]
 }
+
+run "token_repositories_reach_the_container" {
+  command = plan
+
+  variables {
+    create_foundation = true
+    github = {
+      jit_enabled          = true
+      runner_group_id      = 1
+      allowed_repositories = ["example-org/example-repo"]
+      allowed_labels       = ["self-hosted"]
+      app = {
+        app_id             = "12345"
+        installation_id    = 678
+        token_repositories = ["example-org/example-repo", "other-repo"]
+      }
+    }
+  }
+
+  assert {
+    condition     = output.container_environment["GITHUB_APP_TOKEN_REPOSITORIES"] == "example-org/example-repo,other-repo"
+    error_message = "The token repository limit must reach the container."
+  }
+}
+
+run "token_repositories_default_to_unset" {
+  command = plan
+
+  variables {
+    create_foundation = true
+    github = {
+      jit_enabled          = true
+      runner_group_id      = 1
+      allowed_repositories = ["example-org/example-repo"]
+      allowed_labels       = ["self-hosted"]
+      app = {
+        app_id          = "12345"
+        installation_id = 678
+      }
+    }
+  }
+
+  assert {
+    condition     = !contains(keys(output.container_environment), "GITHUB_APP_TOKEN_REPOSITORIES")
+    error_message = "Unset, the controller derives the limit itself, so nothing must be passed."
+  }
+}
+
+run "bad_token_repository_is_rejected" {
+  command = plan
+
+  variables {
+    github = {
+      jit_enabled = true
+      app = {
+        app_id             = "12345"
+        installation_id    = 678
+        token_repositories = ["a/b/c"]
+      }
+    }
+  }
+
+  expect_failures = [var.github]
+}

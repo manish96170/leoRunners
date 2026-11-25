@@ -143,9 +143,10 @@ locals {
   } : {}
 
   github_app_environment = local.use_github_app ? {
-    GITHUB_APP_ID                = try(var.github.app.app_id, "")
-    GITHUB_APP_INSTALLATION_ID   = try(tostring(var.github.app.installation_id), "")
-    GITHUB_APP_TOKEN_PERMISSIONS = join(",", [for name in sort(keys(try(var.github.app.token_permissions, {}))) : "${name}=${var.github.app.token_permissions[name]}"])
+    GITHUB_APP_ID                 = try(var.github.app.app_id, "")
+    GITHUB_APP_INSTALLATION_ID    = try(tostring(var.github.app.installation_id), "")
+    GITHUB_APP_TOKEN_PERMISSIONS  = join(",", [for name in sort(keys(try(var.github.app.token_permissions, {}))) : "${name}=${var.github.app.token_permissions[name]}"])
+    GITHUB_APP_TOKEN_REPOSITORIES = join(",", try(var.github.app.token_repositories, []))
   } : {}
 
   runner_environment = var.runner.enabled ? {

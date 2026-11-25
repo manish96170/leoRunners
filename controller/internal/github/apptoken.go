@@ -67,14 +67,38 @@ type AppTokenSourceConfig struct {
 	// granted, for example {"administration": "write"}. Empty keeps the App's
 	// full installation permissions.
 	Permissions map[string]string
-	HTTPClient  *http.Client
-	UserAgent   string
-	Timeout     time.Duration
-	Retry       RetryConfig
+	// Repositories optionally restricts the minted token to these repositories
+	// of the installation's account (names, not owner/name). Empty keeps every
+	// repository the installation can reach. The App's grant on a repository
+	// outside the list is then unusable through this token, so a defect or a
+	// compromise cannot act on it.
+	Repositories []string
+	HTTPClient   *http.Client
+	UserAgent    string
+	Timeout      time.Duration
+	Retry        RetryConfig
 	// RefreshBefore is how long before expiry a new token is requested.
 	RefreshBefore time.Duration
 	// Now is injectable for tests.
 	Now func() time.Time
+}
+
+// maxAppTokenRepositories is GitHub's limit for one installation token request.
+const maxAppTokenRepositories = 500
+
+var tokenRepositoryNameRE = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
+
+// ValidateRepositories checks a token-restricting repository list.
+func ValidateRepositories(repositories []string) error {
+	if len(repositories) > maxAppTokenRepositories {
+		return fmt.Errorf("too many token repositories (max %d)", maxAppTokenRepositories)
+	}
+	for _, name := range repositories {
+		if !tokenRepositoryNameRE.MatchString(name) || name == "." || name == ".." {
+			return fmt.Errorf("invalid token repository name %q (give the repository name without its owner)", name)
+		}
+	}
+	return nil
 }
 
 // ValidatePermissions checks a token-narrowing permission set.
@@ -100,6 +124,7 @@ type AppTokenSource struct {
 	installationID int64
 	key            *rsa.PrivateKey
 	permissions    map[string]string
+	repositories   []string
 	client         *Client
 	endpoint       string
 	timeout        time.Duration
@@ -177,12 +202,16 @@ func NewAppTokenSource(config AppTokenSourceConfig) (*AppTokenSource, error) {
 	}
 	base.Path = decoded
 
+	if err := ValidateRepositories(config.Repositories); err != nil {
+		return nil, err
+	}
+	repositories := normalizeRepositories(config.Repositories)
 	permissions := make(map[string]string, len(config.Permissions))
 	for name, level := range config.Permissions {
 		permissions[name] = level
 	}
 	return &AppTokenSource{
-		appID: appID, installationID: config.InstallationID, key: key, permissions: permissions,
+		appID: appID, installationID: config.InstallationID, key: key, permissions: permissions, repositories: repositories,
 		client:   &Client{baseURL: parsed, httpClient: httpClient, userAgent: userAgent, timeout: timeout, retry: normalizeRetryConfig(config.Retry)},
 		endpoint: base.String(), timeout: timeout, refreshBefore: refreshBefore, now: now,
 	}, nil
@@ -285,8 +314,15 @@ func (s *AppTokenSource) mint(ctx context.Context) (string, time.Time, error) {
 		return "", time.Time{}, err
 	}
 	var body []byte
-	if len(s.permissions) > 0 {
-		body, err = json.Marshal(map[string]any{"permissions": s.permissions})
+	if len(s.permissions) > 0 || len(s.repositories) > 0 {
+		request := map[string]any{}
+		if len(s.permissions) > 0 {
+			request["permissions"] = s.permissions
+		}
+		if len(s.repositories) > 0 {
+			request["repositories"] = s.repositories
+		}
+		body, err = json.Marshal(request)
 		if err != nil {
 			return "", time.Time{}, errors.New("encode GitHub installation token request")
 		}
@@ -411,6 +447,22 @@ func parseAppPrivateKey(data []byte) (*rsa.PrivateKey, error) {
 		return nil, errors.New("GitHub App private key is inconsistent")
 	}
 	return key, nil
+}
+
+// normalizeRepositories returns the repository names sorted and without
+// duplicates, so the request body is deterministic.
+func normalizeRepositories(repositories []string) []string {
+	seen := make(map[string]struct{}, len(repositories))
+	out := make([]string, 0, len(repositories))
+	for _, name := range repositories {
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // PermissionsString renders a permission set deterministically, for logs and

@@ -300,6 +300,56 @@ func TestAppTokenSourceNarrowsPermissions(t *testing.T) {
 	}
 }
 
+func TestAppTokenSourceRestrictsRepositories(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}
+	fake, server := newFakeGitHub(t, testKey(t), clock)
+	source := newTestSource(t, server.URL, clock, func(c *AppTokenSourceConfig) {
+		c.Repositories = []string{"widgets", "api", "widgets"}
+	})
+	if _, err := source.BearerToken(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if body, _ := fake.lastBody.Load().(string); body != `{"repositories":["api","widgets"]}` {
+		t.Fatalf("request body = %q, want sorted, de-duplicated repositories", body)
+	}
+}
+
+func TestAppTokenSourceSendsPermissionsAndRepositoriesTogether(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}
+	fake, server := newFakeGitHub(t, testKey(t), clock)
+	source := newTestSource(t, server.URL, clock, func(c *AppTokenSourceConfig) {
+		c.Permissions = map[string]string{"administration": "write"}
+		c.Repositories = []string{"widgets"}
+	})
+	if _, err := source.BearerToken(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if body, _ := fake.lastBody.Load().(string); body != `{"permissions":{"administration":"write"},"repositories":["widgets"]}` {
+		t.Fatalf("request body = %q", body)
+	}
+}
+
+func TestValidateRepositoriesRejectsAnythingThatIsNotABareName(t *testing.T) {
+	for _, bad := range []string{"", "owner/repo", "a b", "..", ".", "name\n", "-" + string(make([]byte, 101))} {
+		if err := ValidateRepositories([]string{bad}); err == nil {
+			t.Errorf("repository %q must be rejected", bad)
+		}
+	}
+	if err := ValidateRepositories([]string{"widgets", "my-repo", "a.b_c", "R1"}); err != nil {
+		t.Errorf("valid names rejected: %v", err)
+	}
+	many := make([]string, 501)
+	for i := range many {
+		many[i] = "r"
+	}
+	if err := ValidateRepositories(many); err == nil {
+		t.Error("more than 500 repositories must be rejected")
+	}
+	if _, err := NewAppTokenSource(AppTokenSourceConfig{AppID: "1", InstallationID: 1, PrivateKeyPEM: pkcs1PEM(testKey(t)), Repositories: []string{"owner/repo"}}); err == nil {
+		t.Error("NewAppTokenSource must reject an owner/name entry")
+	}
+}
+
 func TestAppTokenSourceRejectsUnusableResponses(t *testing.T) {
 	tests := map[string]string{
 		"empty token":       `{"token":"","expires_at":"2099-01-01T00:00:00Z"}`,
