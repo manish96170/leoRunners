@@ -99,7 +99,10 @@ repositories:
    webhook deliveries the App receives, and `GET /app/installations`
    (authenticated with an App JWT) lists it.
 6. **Runner group.** Create or choose the runner group the runners register to
-   and set its numeric ID as `github.runner_group_id`.
+   and set its numeric ID as `github.runner_group_id`. With the default
+   repository scope this must be the Default group (ID 1); an organization
+   runner group needs organization scope (see
+   [Where runners register](#where-runners-register-repository-or-organization)).
 
 Storing the key, for example:
 

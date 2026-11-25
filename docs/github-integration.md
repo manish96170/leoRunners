@@ -6,6 +6,6 @@ The current GitHub REST API exposes repository-level JIT runner configuration at
 
 The controller must tolerate duplicate and missing events, API rate limits, cancellation races, reruns, stale jobs, runner registration failure, and controller restarts. GitHub remains the source of truth for job status; our state records the orchestration lease and provider correlation.
 
-Phase 3 adds an injected JIT client and registration-verifier boundary. The encoded JIT value is transient bootstrap input and is excluded from durable runner records and lifecycle-event data. The real GitHub client calls the repository JIT endpoint with a short-lived bearer token; the runner bootstrap invokes the pre-baked runner's JIT entrypoint and removes temporary sensitive material on exit.
+Phase 3 adds an injected JIT client and registration-verifier boundary. The encoded JIT value is transient bootstrap input and is excluded from durable runner records and lifecycle-event data. The real GitHub client calls the repository JIT endpoint with a short-lived bearer token; the runner bootstrap downloads a pinned, checksum-verified runner at launch (it is not baked into the image) and invokes its JIT entrypoint and removes temporary sensitive material on exit.
 
 References: https://docs.github.com/en/rest/actions/self-hosted-runners and https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_job.

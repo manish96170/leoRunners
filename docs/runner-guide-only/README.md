@@ -53,8 +53,10 @@ The following has been verified locally or with mocked services:
   delivery, restart safety, completion cleanup, shutdown draining, scoped
   webhook routing, and reaper cases.
 
-These checks do **not** prove real GitHub, EC2, DynamoDB, network, cache,
-artifact, browser, Docker, or workload behavior.
+These checks do **not** prove real EC2, DynamoDB, network, cache, browser,
+Docker, or full workload behavior. A local rehearsal against github.com has
+since passed lint, test shards and a hidden-file artifact build on
+controller-launched runners (see `HANDOFF.md`).
 
 ## Local verification commands
 
@@ -176,13 +178,12 @@ ownership-tag intersection, never by name or network location.
 
 After one successful live job and cleanup proof:
 
-1. apply the currently validated GitHub timeout settings at runtime;
-2. publish a controller image with a recorded digest list, built from the same
+1. publish a controller image with a recorded digest list, built from the same
    commit as the Terraform modules that deploy it;
-3. add the App manifest and complete operator documentation;
-4. capture runner image startup, workload, cache, artifact, network, and cost
+2. add the App manifest and complete operator documentation;
+3. capture runner image startup, workload, cache, artifact, network, and cost
    measurements; and
-5. cut a new release tag only after the live evidence is reviewed.
+4. cut a new release tag only after the live evidence is reviewed.
 
 ## Target-workload admission checklist
 
@@ -208,11 +209,12 @@ label rather than a guessed or broad label.
 
 ## Current known limits
 
-- GitHub App authentication has not yet contacted github.com.
+- GitHub App authentication has run against github.com only from the local
+  rehearsal, in repository scope. Organization scope and real EC2 have not.
 - The controller currently serves one App installation and one replica.
 - The webhook queue is in memory, so a crash can lose queued events.
-- Several GitHub registration timeout settings are validated but not yet used
-  by the executable.
+- A runner created for a job cancelled while queued waits for another job or
+  until its lifetime (`RUNNER_MAX_LIFETIME`) ends.
 - Organization-level JIT is implemented and tested against a fake GitHub only.
   Repository-level JIT needs broader GitHub App permissions and remains the
   default for compatibility.

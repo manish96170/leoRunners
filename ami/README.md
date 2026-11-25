@@ -99,6 +99,52 @@ Tools that `actions/setup-node` or a workflow installs itself at job time (Node,
 Terraform) do not need baking; baking them saves job time and makes the job
 independent of the download, which is the usual reason to.
 
+## Profiles: a base image and derived images
+
+| Profile | What it adds | Built with |
+|---|---|---|
+| `base-linux-x64` | the base tools above | no extension |
+| `frontend-browser-linux-x64` | a pinned Chrome, the libraries Cypress needs to drive it, Docker, optionally a pinned Terraform | `extensions/frontend-browser.sh` |
+
+A derived profile has exactly one parent, may only add tools, and never weakens
+the parent's security settings (`tools/ami-validation/validate.sh` fails
+otherwise). Add a profile only when a real workload needs it; group repositories
+by the kind of workload, not one image per repository, so there are few images to
+patch. Each image is rebuilt for OS patches and runner updates, so every profile
+is a recurring cost in effort even though a stored AMI costs very little.
+
+Build the front-end image like this (the values come from the infra repository,
+not from here):
+
+```hcl
+extension_script      = "../ami/extensions/frontend-browser.sh"
+extension_environment = {
+  CHROME_RPM_URL    = "https://<your storage>/google-chrome-stable-<version>-1.x86_64.rpm"
+  CHROME_RPM_SHA256 = "<sha-256 of that file>"
+  INSTALL_DOCKER    = "true"
+  # optional, both together:
+  # TERRAFORM_VERSION            = "0.12.23"
+  # TERRAFORM_SHA256_LINUX_AMD64 = "<sha-256 of the release archive>"
+}
+ami_name_prefix = "leo-runners-frontend-browser-x86_64"
+```
+
+The extension was run on Amazon Linux 2023 x86_64 (under emulation) with a pinned
+Chrome and Terraform and the distribution's Docker; the build log ends with the
+record of what was installed. Chrome cannot start under CPU emulation, so that
+run set `CHROME_LAUNCH_CHECK=false`; on a real x86 builder the extension starts
+Chrome headless once and fails the build if it cannot (that check has not run
+yet). The image records what it carries in `/etc/leo-runners/extension-frontend-browser`.
+Instances launched from an image that has Docker put the runner user in the
+`docker` group (the bootstrap does this only when the group exists). That is
+root-equivalent on the host, which is acceptable only because each instance is
+single-use, private and holds no credentials beyond its one-time registration.
+
+A runner image is chosen through the launch template, so a repository that needs
+the browser image runs on a runner pool whose launch template points at it.
+Today one controller deployment has one launch template; routing several labels
+to several images is not built yet.
+
 ## Image contents
 
 The installer uses Amazon Linux 2023's `dnf` package manager and installs:

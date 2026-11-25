@@ -1,172 +1,267 @@
 # Handoff
 
-## Read this first (current state, 2026-11-20)
+## Read this first (state at 2026-11-26)
 
-LeoRunners is a generic, self-hosted, ephemeral GitHub Actions runner platform
-(controller in Go, AWS EC2 provider, Terraform modules). The repository is public
-and personally owned. The goal now is to make it **customer-ready on AWS** and to
-prove it with a real pull-request job.
+LeoRunners is a generic, self-hosted, ephemeral GitHub Actions runner platform:
+a Go controller, an AWS EC2 provider, Terraform modules, a runner bootstrap, an
+AMI recipe and a local rehearsal harness. The repository is public and
+personally owned. It is a product, not one customer's deployment: think of it as
+an alternative to hosted runner services that anyone can deploy into their own
+cloud account.
 
-`main` is at the commit after PR #6. The only tag is `tf-aws-v0.1.0`, which is
-older than PRs #4 to #6 (use a commit SHA until a new tag is cut after the first
-live run).
+**Goal now:** make it customer-ready on AWS, proven with a real pull-request
+workload, first in a throwaway repository, then (much later, only on the owner's
+word) in a real front-end repository.
 
-### Ground rules
+**Where we are:** the controller has run a real workload on runners it launched
+itself against github.com, using a real GitHub App, with a local emulator
+standing in for AWS. Four jobs passed. Nothing has run on real EC2 yet. The next
+step is a real x64 EC2 run of the same throwaway repository, using two AMIs
+(see "Images"). Use `git log` for the exact commit; the last tag
+(`tf-aws-v0.1.0`) is old, so customer repositories pin a commit SHA.
 
-- **Nothing company- or customer-specific goes in this repo.** No names,
-  domains, account IDs, user home paths or customer defaults. Every
-  environment-specific value is a variable. Customer config lives in separate
-  infrastructure repos, which consume the modules from a pinned ref. Do not touch
-  any other repo.
-- **Git identity** is `Manish Sharma <30901306+manish96170@users.noreply.github.com>`
-  (set locally in this repo). The global git email is a company address and must
-  never appear here. Check `git config user.email` before committing and
-  `git log --format='%ae %ce'` before pushing.
-- **Push, PR and merge** with only the `manish96170` GitHub login, per command,
-  without changing global git or gh config:
-  `export GH_TOKEN=$(gh auth token --user manish96170)` and a credential-helper
-  override for `git push` (`-c credential.https://github.com/.helper=` then a
-  helper that returns `username=manish96170` and `password=$GH_TOKEN`). The
-  default `gh` account on the machine is a company one.
-- **Workflow:** branch, commit, push, PR, wait for the 4 CI checks (Unit tests,
-  Race tests, Vet, Build and container checks), squash-merge with
-  `--delete-branch`, sync local `main`. Scan for company markers before every
-  commit.
+### Ground rules (do not break these)
+
+- **Nothing customer- or company-specific goes in this repository.** No names,
+  domains, account IDs, App or installation IDs, subnets, labels, user home paths
+  or customer defaults. Every environment value is a variable. Customer values
+  live in the customer's own infrastructure repository, which consumes these
+  modules from a pinned commit. Scan before every commit:
+  `git diff | grep '^+' | grep -iE '<your marker list>'`.
+- **Never edit another repository.** Findings for the infra side go to the owner
+  as plain text (a prompt file kept outside this repo); fixes for generic code
+  come here.
+- **Git identity** in this repo is the personal noreply identity set in its local
+  config. The machine's global git email is a company address and must never
+  appear in this repo. Check `git config user.email` before committing.
+- **Push, PR, merge** use only the personal GitHub login, per command, without
+  changing global git or `gh` configuration (`GH_TOKEN` from
+  `gh auth token --user <personal>` plus a one-shot credential-helper override
+  for `git push`). Another login on the machine belongs to the company; use it
+  only for the throwaway test repository, per command, and only where the owner
+  said so.
+- **Workflow:** branch, commit, push, PR, wait for the four CI checks (Unit
+  tests, Race tests, Vet, Build and container checks), squash-merge with
+  `--delete-branch`, sync `main`.
 - **No real AWS without explicit instruction.** The machine has company AWS
-  profiles; never use them. Everything local runs against the floci emulator.
-- **Secrets** (GitHub App private key, tokens) never go in the repo, logs or the
-  chat. The key goes to the emulator's Secrets Manager through
-  `tools/local-rehearsal/store-app-key.sh`.
-- License is PolyForm Noncommercial 1.0.0.
+  profiles; never use them. Local work runs against the floci emulator.
+- **Secrets** (App private key, tokens, webhook secret) never go in the repo,
+  logs, chat or tool output. The key goes to the emulator's secret store through
+  `tools/local-rehearsal/store-app-key.sh`; the webhook secret lives in
+  `~/.leo-runners-rehearsal/webhook-secret` and is read from there.
+- **Do not change settings of the owner's GitHub App or organization on your own
+  initiative.** When the owner approves a change, make exactly that change and
+  say what it was. GitHub asks for "Confirm access" (re-authentication) on some
+  settings pages; that step is the owner's.
+- License: PolyForm Noncommercial 1.0.0.
+
+### Who owns what
+
+| LeoRunners (this repo, generic) | The customer's infrastructure repository |
+|---|---|
+| Controller code, Terraform modules, runner bootstrap, AMI recipe and extension hook, profile format, validation tools, docs, tests | Account, region, network, subnets, security groups, hostnames, certificates, runner labels, approvals, request IDs, cleanup deadlines, tool versions and the extension scripts that bake them, AMI IDs, retention |
+| Defaults safe for any customer; every environment value is an input | Passes those inputs to pinned copies of the modules; applies only after a reviewed plan and an explicit approval |
+| Never holds a secret | Secrets are placed by a human in the customer's own secret store |
+
+A missing input, a rigid default, or anything the other side had to hard-code
+is a generic defect: fix it here, test it on both AWS provider v5 and v6
+(`terraform/validate-aws-modules.sh --provider-version <x.y.z>`), merge, and
+hand over a new commit SHA.
+
+### How the controller works (the parts that bit us)
+
+1. GitHub sends `workflow_job` webhooks. The handler checks the signature,
+   answers immediately (`202`, `200` for `ping`) and queues the event.
+2. For a `queued` job the controller creates one runner: a one-time JIT
+   configuration from GitHub, then an instance from the launch template with that
+   configuration in its user data, then it waits for the runner to register.
+3. A runner runs exactly one job and powers the instance off.
+4. **Runners are interchangeable.** GitHub gives a queued job to any idle runner
+   whose labels match, not to the runner created for it. So the runner created for
+   job A may run job B. Consequences, all implemented: a job's end retires only
+   the runner the webhook names (`runner_name`, which carries the job number it
+   was created for); a job that ended without running retires none; the
+   reconciler never terminates a runner because its job ended; leftovers go at
+   their lifetime (`RUNNER_MAX_LIFETIME`).
+5. The registration wait can take minutes and the reconciler runs throughout, so
+   records are re-read after the wait (`markRunnerReady`, `settleAssigned`).
+6. Two reapers: state-driven (records) and a provider-side backstop that lists
+   instances by the `leo-runners:managed-by` tag and removes any 10 minutes past
+   `leo-runners:expires-at`, with or without a record. The state table's TTL is
+   `ttl_at` (seven days after `expires_at`), never the reaping deadline.
+7. Registration scope: `repository` (default; needs repository Administration
+   write; runners can join only the Default runner group, ID 1) or
+   `organization` (needs the organization "Self-hosted runners" permission;
+   an organization runner group applies). The organization path is tested only
+   against a fake server.
+8. Minted installation tokens are limited to the allowlisted repositories
+   (`GITHUB_APP_TOKEN_REPOSITORIES`, derived from `GITHUB_ALLOWED_REPOSITORIES`
+   unless an organization is allowed or owners differ), because an App's grant
+   applies to every repository it is installed on.
+9. The launch template owns the network interface (no public IP); the controller
+   must not also be given a subnet or security groups. `max_runners` defaults to
+   1: a workflow that queues several jobs at once needs a higher value or its
+   extra jobs never get a runner.
 
 ### What exists and is verified
 
-- **GitHub App authentication** (App ID, installation ID, private key; short-lived
-  installation tokens), Terraform, Kubernetes and docs. Mutually exclusive with a
-  static installation token. One controller serves one installation. Tested only
-  against a fake GitHub server so far.
-- **Async webhook acknowledgement** (`controller/internal/dispatch`): the webhook
-  returns `202` in about a millisecond; provisioning runs in the background
-  (`WEBHOOK_WORKERS`, `WEBHOOK_QUEUE_SIZE`, `WEBHOOK_EVENT_TIMEOUT`, metric
-  `webhook_events_total`). The queue is in memory.
-- **Reaper fixes** (PR #6): the state table's TTL is `ttl_at` (seven days after
-  `expires_at`, the logical expiry that drives reaping), and the reconciler has a
-  provider-side backstop (`providers.ManagedLister`; AWS lists by the
-  `leo-runners:managed-by` tag) that terminates owned instances more than 10
-  minutes past their `leo-runners:expires-at` tag, with or without a record. An
-  instance with no readable expiry tag or not tagged as ours is never removed.
-  The GCP provider does not implement the backstop.
-- **AWS Terraform:** `terraform/modules/aws-ecs-controller`,
-  `aws-shared-gateway`, `aws-ephemeral-runner` (contract only), `controller-state`,
-  `terraform/environments/aws-foundation`, example in `terraform/examples/aws-customer`.
-  Validated by `terraform/validate-aws-modules.sh` and
-  `tools/terraform-validation/validate.sh`.
-- **Runner user-data template:** `bootstrap/runner/user-data.sh` (pinned,
-  SHA-256-verified runner download; `pin-latest-runner.sh` refreshes the pin).
-  Production should pre-bake the runner into the AMI instead.
-- **Local rehearsal harness:** `tools/local-rehearsal/` (README has the full
-  procedure). Stage 1 (no GitHub) is verified: bad signature `401`, queued `202`
-  immediately even on a cold launch, duplicates and restarts safe, completed
-  terminates, SIGTERM drains, a signed webhook through a real Cloudflare quick
-  tunnel works, other paths return `404` via `webhook-gate.py`.
-  `check-reaper.sh` verifies the reaper cases (about two minutes).
-- **Migration check for an existing private infra repo:** the generic
-  `aws-ecs-controller` / `aws-shared-gateway` modules were planned and applied on
-  the emulator over copies of an older, company-specific composition using
-  `moved` blocks. Result: no real resource deleted without a replacement (task
-  definition and ECR lifecycle policy are replaced; table gets deletion
-  protection and the new TTL attribute). Details were handed to that repo's own
-  session; feedback from it is the likely input for this session.
+- Everything above, with unit tests (`go test -race ./...`, 32 packages), Terraform
+  mocked-provider tests on AWS provider 5.100.0 and 6.73.0, and shell suites.
+- `terraform/modules/aws-ecs-controller`, `aws-shared-gateway`,
+  `aws-runner-layer` (launch template, runner role and instance profile, an
+  ingress-free security group, a ready-made `runner` object), the
+  `aws-ephemeral-runner` contract, `controller-state`, an example composition
+  with a no-cycle test.
+- `tools/launch-check/check.sh`: a read-only check of a launched instance (no
+  public IP, IMDSv2, tags on instance and volumes, encryption, shutdown
+  behaviour). Tested against a stub only.
+- `examples/validation-workload`: a small front-end project and a PR-only,
+  read-only, secret-free workflow that exercises what real repositories ask of a
+  runner (exact Node, Yarn cache, lint, test shards, a hidden-file artifact
+  round trip, legacy amd64-only Terraform with teardown, Cypress on Chrome,
+  optional Docker). It passed fully on GitHub-hosted runners.
+- `tools/local-rehearsal`: floci + the controller + a Cloudflare quick tunnel,
+  `check-reaper.sh`, `app-installations.sh`, `app-deliveries.sh`.
+- `ami/`: the base image recipe, an extension hook, tag support, and a derived
+  front-end profile (see "Images").
+
+### The first live runs (what they proved and found)
+
+A throwaway repository in a test organization ran the sample workload on
+runners launched by the rehearsal. Lint, both unit shards and the build with a
+hidden-file artifact passed on controller-launched runners. The integration job
+did not run (it needs real x64 hardware). Defects found and fixed, each with a
+test that fails against the old code:
+
+| Defect | PR | Symptom |
+|---|---|---|
+| Registration wait raced the reconciler (revision conflict) | #16 | healthy runners killed mid-job |
+| Runners treated as bound to jobs | #20 | a finished job killed the runner running another job |
+| Timeouts validated but never applied | #19 | slow start cut off at ten minutes |
+| `ping` answered 400 | #15 | failed deliveries |
+| `libatomic` missing from the base image | #17 | Node exit 127 |
+| Repository-level runner given an organization group ID | #18 | 404 from GitHub |
+| Token reached every repository the App is installed on | #22 | exposure of an unrelated repository |
+
+**The lesson:** an emulator that starts instantly hides races and assumptions
+that real timing exposes. Expect the first real EC2 run to find more; fix them
+generically, add the failing test first.
+
+### Images (AMIs)
+
+- **Decision:** the recipe, extension hook and profile format are generic;
+  builds, tool versions, URLs, checksums, AMI IDs and retention belong to the
+  customer. Prefer a few profile images by kind of workload over one per
+  repository.
+- **Two images planned:** `base-linux-x64` (generic: git, jq, unzip, `libatomic`,
+  curl, openssl; the runner is downloaded and checksum-verified at launch) and
+  `frontend-browser-linux-x64` (base plus a pinned Chrome, the libraries Cypress
+  needs, Docker, optionally a pinned Terraform), built with
+  `ami/extensions/frontend-browser.sh`. After about three more front-end
+  repositories pass on the front-end image, the base image can be retired unless
+  something still needs it.
+- A build uses a temporary builder instance that Packer removes; it still creates
+  real AWS resources and needs the customer's approvals. `extra_tags` tags the
+  builder, volume, AMI and snapshots for tag-based cleanup.
+- Cost shape: an AMI is cheap (snapshot storage, cents to a few tens of cents a
+  month); running instances are the cost, and a baked image shortens billed boot
+  time. Confirm prices in the cloud provider's calculator.
+- **Not built:** routing several labels to several images. One controller
+  deployment has one launch template.
+
+### Resuming the local live run (runbook, generic)
+
+Needs: Colima/Docker with about 15 GB free in the VM (if low, `docker volume
+prune -f` removes only unreferenced volumes; unrelated containers leak them),
+`aws`, `terraform`, `go`, `cloudflared`, `python3`.
+
+1. `tools/local-rehearsal/floci.sh up` and `setup.sh` (floci forgets everything
+   when it restarts; the key must be stored again after a restart).
+2. `store-app-key.sh <downloaded .pem>` (then delete the file) and
+   `app-installations.sh <app-id>` to confirm the key and find the installation.
+3. `~/.leo-runners-rehearsal/github.env`: App ID, installation ID, runner group
+   ID (`1` for repository scope), scope, allowed repository, labels. None is a
+   secret.
+4. `tunnel.sh` prints the webhook URL (it changes at every restart), then
+   `run-controller.sh --jit`. The owner pastes the URL into the App's webhook
+   settings (SSL verification stays enabled; the secret comes from
+   `~/.leo-runners-rehearsal/webhook-secret`).
+5. Set the sample repository's `LEO_RUNS_ON` variable to the runner labels and
+   push a commit to its pull request. Watch with `app-deliveries.sh`, the
+   controller log and the run's job list. Four runners boot slowly under the
+   emulator (many minutes); `GITHUB_REGISTRATION_TIMEOUT` is 30 minutes there.
+6. Clean up: cancel the run, `stop-controller.sh`, `tunnel.sh stop`, delete
+   leftover runner registrations, terminate instances, check no runner
+   containers remain, ask the owner to disable the webhook and remove the repo
+   variable.
+
+The emulator runs arm64 containers; the sample's legacy Terraform job fails
+there by design (no arm64 build), which is the point of the real x64 step.
+
+### Next steps, in order
+
+1. Merge the front-end profile work (extension, profile, derived-profile checks,
+   bootstrap docker group) once its container test is recorded.
+2. Customer side builds the base and front-end AMIs (after their own approvals),
+   from a pinned commit of this repo, with `extra_tags` and a checksum-verified
+   Chrome kept in their own storage. Prompt files for that live outside the repo.
+3. Customer side applies the runner layer and controller service; real x64 run of
+   the sample repository on the front-end image; `tools/launch-check` output kept
+   as evidence; clean up by tag.
+4. Fix what that run finds (generic, test first), publish a new commit SHA, then
+   cut a release tag and a controller image with a recorded digest.
+5. Only then: a controlled window on a real front-end repository, following the
+   owner's rules (separate PR-only workflow, explicit label, hosted-runner
+   fallback intact).
+6. Backlog (see `TODO.md`): label-to-image routing, organization scope against
+   github.com, releasing idle runners sooner, a durable webhook queue,
+   multi-replica coordination, a GitHub App manifest, customer docs.
+
+### Known limits
+
+- Never run on real EC2 or real DynamoDB. Floci is a rehearsal, not a performance
+  or security test (and boots four runners slowly).
+- One controller replica; one App installation per controller; the webhook queue
+  is in memory.
+- Repository scope needs the broad Administration permission and the Default
+  group; organization scope is untested against github.com.
+- A runner created for a job cancelled while queued waits for another job or its
+  lifetime.
+- The integration job (legacy Terraform, Cypress, Docker, teardown) has not run
+  on a LeoRunners runner.
+- An existing state table with TTL on `expires_at` must be switched to `ttl_at`
+  (`terraform/modules/controller-state/README.md`).
+
+### Gotchas for whoever continues
+
+- Google's repository keeps only the current Chrome, so a versioned URL stops
+  working within weeks: pin Chrome by an RPM you keep in your own storage and
+  verify by SHA-256.
+- Node 25+ does not ship corepack; the sample installs Yarn with npm when absent.
+- Biome 2.6 also lints Markdown; the sample excludes it.
+- A mocked Terraform provider gives computed values only on `apply`, not `plan`.
+- `sed -i` on macOS needs `-i ''`; a shell tool may reject dynamic quoting, so
+  put logic in a script file; macOS Colima mounts only `$HOME`.
+- Do not run two `terraform init` provider downloads at once on a nearly full
+  disk.
+- Chrome cannot start under CPU emulation (QEMU); test its launch only on real
+  x86 hardware (`CHROME_LAUNCH_CHECK=false` skips it for emulated builds).
+- The browser tool connection to the owner's Chrome can time out; ask the owner
+  to re-allow it, and never type credentials or confirm access for them.
 
 ### How to run the checks
 
 ```sh
-cd controller && go vet ./... && go test -race -count=1 ./...        # 32 packages
-tools/local-rehearsal/test.sh                                         # harness self-test
-for t in bootstrap/runner/test.sh tools/config-validation/test.sh deploy/kubernetes/test.sh \
-         tools/smoke/test.sh tools/terraform-validation/test.sh; do bash $t; done
-terraform/validate-aws-modules.sh
-tools/local-rehearsal/floci.sh up && tools/local-rehearsal/setup.sh && tools/local-rehearsal/check-reaper.sh
+cd controller && go vet ./... && go test -race -count=1 ./...
+for t in tools/local-rehearsal/test.sh tools/config-validation/test.sh deploy/kubernetes/test.sh \
+         tools/smoke/test.sh tools/terraform-validation/test.sh bootstrap/runner/test.sh \
+         tools/launch-check/test.sh examples/validation-workload/test.sh ami/test.sh \
+         tools/ami-validation/test.sh; do bash $t; done
+for v in 5.100.0 6.73.0; do terraform/validate-aws-modules.sh --provider-version $v; done
 ```
 
-For concurrency changes also run `go test -race -count=60 ./internal/dispatch`;
-it once caught a flaky hang in a test.
-
-### Local environment facts (floci)
-
-- Rehearsal state lives in `~/.leo-runners-rehearsal` (state, logs, built
-  binary). The floci container is `leo-floci` on `127.0.0.1:4566`, account
-  `000000000000`. `tools/local-rehearsal/down.sh` tears it down.
-- Instances are Docker containers; user-data runs 30 to 60 seconds after launch.
-  Use arm64 AMIs (`ami-amazonlinux2023-arm64`) on Apple Silicon. Amazon Linux 2023
-  is not supported by the runner's `installdependencies.sh`, so the template
-  installs dependencies with dnf. Colima mounts only `$HOME`; use `docker cp`
-  instead of bind mounts from temp paths.
-- Override the webhook secret with `LEO_WEBHOOK_SECRET` (not `WEBHOOK_SECRET`).
-- The shell tool rejects some dynamic quoting; put complex logic in a script file.
-
-### First live run (2026-11-24/25)
-
-A throwaway repository in a test organization ran a PR-only validation workload
-(`examples/validation-workload`) on runners launched by the local rehearsal
-(floci plus a Cloudflare quick tunnel), using a real GitHub App. Four jobs
-(lint, two unit shards, build with a hidden-file artifact) passed on
-controller-launched runners. The first runs found these defects, all fixed:
-
-- the registration wait raced the reconciler and the controller terminated
-  healthy runners mid-job (state revision conflict) (#16);
-- `libatomic` was missing from the base image, so Node exited 127 (#17);
-- GitHub's `ping` was answered 400 (#15);
-- a repository-level runner can only join the Default group, so an organization
-  group ID gave 404 (#18);
-- the registration timeout and poll interval were validated but never applied,
-  and a slow start was cut off at ten minutes (#19);
-- runners are interchangeable: GitHub gives a job to any idle runner with
-  matching labels, and the controller (and reconciler) terminated the runner
-  created for a finished job even when it was running another one (#20).
-
-Not yet proven: the integration job on real x64 hardware, anything on real EC2
-or DynamoDB, and the organization-scope path against github.com (the App used
-has no organization permission). The emulator boots four runners slowly and
-needs about 15 GB free in the Docker VM; see `tools/local-rehearsal/README.md`.
-
-### Next steps, in order
-
-1. **Apply feedback** from the infra-repo session if there is any (a module gap,
-   a missing input, an unexpected replacement). Fix in this repo generically,
-   test, PR.
-2. **Stage 2: a real PR job** (needs the owner): create the GitHub App in a
-   browser (settings in `tools/local-rehearsal/README.md` "Stage 2": Repository
-   Administration read/write, Actions read-only, Workflow job event, installed on
-   the test repository only), choose a test repo (ideally in a test org), then
-   `store-app-key.sh`, `app-installations.sh <app-id>`, fill
-   `~/.leo-runners-rehearsal/github.env`, `run-controller.sh --jit`, `tunnel.sh`,
-   paste the webhook URL into the App, open a PR with the sample workflow.
-   Also resolves TODO 2.1a and 2.5c. Expect to fix bugs; this is the first real
-   GitHub contact.
-3. **Real-AWS layer** (needs a **non-company** AWS account from the owner): launch
-   template, runner IAM role and instance profile, runner network, baked AMI
-   behind the `aws-ephemeral-runner` contract (TODO 2.2c), then the disposable
-   account smoke test (2.5d).
-4. Then: org-level JIT endpoint so the App needs a narrower permission (2.1b),
-   apply the unused GitHub timeout settings (2.1d), publish a controller image
-   with a digest list (2.2d), GitHub App manifest (2.3), customer docs (TODO
-   section 1), cut a new release tag after the live run, optional durable queue.
-
-### Known limits (also in `TODO.md` and the docs)
-
-- GitHub App auth has never talked to github.com; only a fake server.
-- One App installation per controller; one controller replica (`desired_count`
-  0 or 1) until multi-replica coordination is wired into the executable.
-- The job queue is in memory; a crash loses queued events (GitHub redelivery and
-  the reconciler cover part of this).
-- `GITHUB_JIT_REQUEST_TIMEOUT`, `GITHUB_REGISTRATION_TIMEOUT` and
-  `GITHUB_REGISTRATION_POLL_INTERVAL` are validated but not applied.
-- Repo-level JIT needs Administration: write on the App.
-- Behaviour on real EC2 and real DynamoDB is untested; floci is a rehearsal, not
-  a performance or security test.
-- An existing state table with TTL on `expires_at` must be switched to `ttl_at`
-  (see `terraform/modules/controller-state/README.md`).
+Run the two provider versions one after the other. For concurrency changes also
+run `go test -race -count=60 ./internal/dispatch`.
 
 ---
 

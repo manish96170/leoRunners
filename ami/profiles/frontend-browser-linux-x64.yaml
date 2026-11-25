@@ -1,0 +1,79 @@
+apiVersion: runner-images.leorunners.io/v1
+kind: RunnerImageProfile
+metadata:
+  name: frontend-browser-linux-x64
+  version: 1.0.0
+  description: Base runner image plus a pinned Chrome, the libraries Cypress needs to drive it, Docker, and optionally a pinned Terraform, for front-end workloads.
+spec:
+  architecture: x86_64
+  operatingSystem: linux
+  parent:
+    kind: runner-image-profile
+    name: base-linux-x64
+    version: 1.0.0
+  bootstrap:
+    entrypoint: /opt/leo-runner/bootstrap/runner/bootstrap.sh
+    contract: github-jit-encoded-config
+    runAs: runner
+    userDataMayInstallPackages: false
+  extension:
+    script: ami/extensions/frontend-browser.sh
+    versionsFrom: extension_environment
+    record: /etc/leo-runners/extension-frontend-browser
+  tools:
+    - name: google-chrome-stable
+      version: pinned-by-build-input
+      checksumRequired: true
+      purpose: headless browser tests
+    - name: xorg-x11-server-Xvfb
+      version: pinned-by-image-build
+      purpose: virtual display for Cypress
+    - name: gtk3
+      version: pinned-by-image-build
+      purpose: Cypress and Chrome runtime library
+    - name: nss
+      version: pinned-by-image-build
+      purpose: Cypress and Chrome runtime library
+    - name: alsa-lib
+      version: pinned-by-image-build
+      purpose: Cypress and Chrome runtime library
+    - name: docker
+      version: pinned-by-image-build
+      purpose: workflows that build or run containers (optional)
+    - name: terraform
+      version: pinned-by-build-input
+      checksumRequired: true
+      purpose: legacy infrastructure tooling pinned to an exact release (optional)
+  security:
+    user: runner
+    allowRootJobs: false
+    credentialsBakedIn: false
+    jitConfigBakedIn: false
+    requireIMDSv2: true
+    encryptedRootVolume: true
+    privilegedContainers: false
+    shellHistoryCleared: true
+    buildArtifactsRemoved: true
+  validation:
+    requiredGates:
+      - schema
+      - reproducibility
+      - forbidden-secret-scan
+      - tool-smoke-test
+      - exact-ami-ephemeral-launch
+      - jit-registration
+      - lifecycle-cleanup
+      - cold-start-measurement
+    measurements:
+      - launch_to_running_ms
+      - running_to_bootstrap_ms
+      - bootstrap_to_registered_ms
+      - registered_to_ready_ms
+      - ready_to_job_ms
+      - total_lifecycle_ms
+      - image_size_bytes
+  publication:
+    state: candidate
+    immutable: true
+    rollbackTo: null
+    regions: []

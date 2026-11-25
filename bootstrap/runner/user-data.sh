@@ -120,6 +120,13 @@ ensure_workload_prerequisites() {
 ensure_workload_prerequisites
 
 id -u "$RUNNER_USER" >/dev/null 2>&1 || useradd --create-home --shell /bin/bash "$RUNNER_USER"
+# An image that carries Docker (the front-end profile) needs the runner user in
+# its group to use it. Membership is root-equivalent on the host, so it is granted
+# only when the image already has Docker; the instance is single-use, private and
+# holds no credentials beyond the one-time JIT configuration.
+if getent group docker >/dev/null 2>&1; then
+  usermod -aG docker "$RUNNER_USER"
+fi
 chown -R "$RUNNER_USER" "$RUNNER_HOME"
 
 jit_dir="$(mktemp -d)"

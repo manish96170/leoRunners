@@ -30,7 +30,7 @@ first as the target experience, then the gaps they expose are built.
 - [x] 2.2g Generic AWS foundation environment (`terraform/environments/aws-foundation`) and shared gateway design note (`docs/aws-shared-gateway-design.md`).
 - [x] 2.1 GitHub App auth in the controller: App ID + installation ID + private key, short-lived installation tokens through the `BearerTokenSource` seam, with Terraform, Kubernetes and docs support (`docs/github-runtime-contract.md`). Tested against a fake GitHub server only.
 - [x] 2.1a GitHub App auth exercised against github.com: installation tokens minted from the stored key, JIT runners created and registered, jobs run on them (local rehearsal against a throwaway repository, repository scope).
-- [x] 2.1b Organization-level JIT (`GITHUB_RUNNER_SCOPE=organization`, Terraform `github.runner_scope`): the App needs the narrower organization Self-hosted runners permission instead of repository Administration. Fake-server tests only; not yet run against github.com.
+- [x] 2.1b Organization-level JIT (`GITHUB_RUNNER_SCOPE=organization`, Terraform `github.runner_scope`): the App needs the narrower organization Self-hosted runners permission instead of repository Administration. Fake-server tests only; not yet run against github.com (the first live run used repository scope, see 2.1a). Kept checked because the implementation is done; the live check is still open.
 - [ ] 2.1c Serve several App installations from one controller (installation ID per event, allowlisted).
 - [x] 2.1d `GITHUB_JIT_REQUEST_TIMEOUT`, `GITHUB_REGISTRATION_TIMEOUT` and `GITHUB_REGISTRATION_POLL_INTERVAL` are applied by the executable. Found on the first real run, where a loaded local machine needed more than the fixed 10 minute registration wait.
 - [x] 2.2h Modules validate on AWS provider v5 and v6 (region read by key; `validate-aws-modules.sh --provider-version`). Found by a customer composition on v5.
@@ -40,17 +40,30 @@ first as the target experience, then the gaps they expose are built.
 - [x] 2.2f Acknowledge webhooks quickly and orchestrate asynchronously (`controller/internal/dispatch`; measured 16s on a cold launch against an emulator before the change). A durable queue is a possible follow-up.
 - [ ] 2.3 GitHub App manifest for one-click App creation.
 - [ ] 2.4 Job-level sizing labels in `runs-on:` (confirm whether label parsing exists).
-- [x] 2.5a Local rehearsal harness (`tools/local-rehearsal`): floci + controller + Cloudflare quick tunnel; stage 1 (webhook intake, launch, terminate, restart safety) verified.
+- [x] 2.5a Local rehearsal harness (`tools/local-rehearsal`): floci + controller + Cloudflare quick tunnel; stage 1 (webhook intake, launch, terminate, restart safety) verified. The Docker VM used by the rehearsal needs about 15 GB free; leftover anonymous Docker volumes from unrelated containers can fill it.
 - [x] 2.5b Generic runner user-data template (`bootstrap/runner/user-data.sh`) with a pinned, checksum-verified runner download.
 - [x] 2.5e Reaper verified against the emulator; found and fixed two ways a runner could be orphaned (table TTL on the reaping deadline; no provider-side discovery). See `docs/aws-provider.md`.
 - [x] 2.5f `tools/launch-check`: read-only evidence check for a launched runner (public IP, IMDS, tags on instance and volumes, encryption, shutdown behaviour); offline-tested with a stub.
-- [x] 2.5g `examples/validation-workload`: a small front-end project and PR-only workflow that exercises what real repositories ask of a runner (exact Node, Yarn cache, lint shards, hidden-file artifacts, legacy amd64-only Terraform with teardown, Cypress, optional Docker). Static test only; not yet run on any runner.
-- [x] 2.5g `examples/validation-workload`: a small front-end project and PR-only workflow that exercises what real repositories ask of a runner (exact Node, Yarn cache, lint shards, hidden-file artifacts, legacy amd64-only Terraform with teardown, Cypress, optional Docker). Static test only; not yet run on any runner.
+- [x] 2.5g `examples/validation-workload`: a small front-end project and PR-only workflow that exercises what real repositories ask of a runner (exact Node, Yarn cache, lint shards, hidden-file artifacts, legacy amd64-only Terraform with teardown, Cypress, optional Docker). Ran in the local rehearsal (see 2.5c): lint, both unit shards and the build passed; the integration job did not run (see 2.5i).
 - [x] 2.5c A real workflow ran on LeoRunners runners from the local rehearsal: lint (exact Node 26.8.2, Yarn cache, actionlint, Biome, custom lint), both unit shards, and a build with a hidden-file artifact all passed on controller-launched runners. Found and fixed six defects on the way (PRs #15-#20). The integration job (legacy Terraform, Cypress, teardown) did not run: it needs real x64 hardware (2.5i).
 - [x] 2.5h Minted installation tokens are restricted to the allowlisted repositories (`GITHUB_APP_TOKEN_REPOSITORIES`, derived from the repository allowlist by default), so an App installed on other repositories cannot be used on them through the controller.
-- [ ] 2.5i Run the integration job (legacy amd64-only Terraform, Cypress on Chrome, Docker, temporary environment and teardown) on a real x64 EC2 runner. The emulator's arm64 containers cannot run it and boot too slowly to be a fair test.
-- [ ] 2.5j Release idle runners sooner: a runner created for a job cancelled while queued now waits for another job or for its lifetime, because runners are interchangeable and the controller no longer terminates the runner "belonging" to a finished job.
-- [ ] 2.5d End-to-end smoke test against a disposable AWS account and test repo.
+- [ ] 2.5i Run the integration job (legacy amd64-only Terraform, Cypress on Chrome, Docker, temporary environment and teardown) on a real x64 EC2 runner. The emulator's arm64 containers cannot run it and boot too slowly to be a fair test. Planned on the front-end image (2.6b to 2.6d), with the sample repository only; keep `tools/launch-check` output as evidence.
+- [ ] 2.5j Release idle runners sooner: a runner created for a job cancelled while queued now waits for another job or for its lifetime (`RUNNER_MAX_LIFETIME`), because runners are single-use and interchangeable and the controller no longer terminates the runner "belonging" to a finished job.
+- [ ] 2.5d End-to-end smoke test against a disposable AWS account and test repo. The first live-EC2 test uses the sample repository (`examples/validation-workload`) only, never a customer production repository. Nothing on real EC2 or real DynamoDB is proven yet.
+
+### 2.6 Runner images and routing
+
+Decisions: the AMI recipe, extension hook and profile format are generic and live here. Builds, extension environment values (tool versions, URLs, checksums), AMI IDs, retention and approvals live in the customer infrastructure repository. Prefer a few profile images grouped by kind of workload over one image per repository. Two images are planned: the generic base image, and a front-end image with Chrome and Docker.
+
+- [ ] 2.6a Build the generic base AMI (`base-linux-x64`) in a customer account, with `extra_tags` for request ID and cleanup deadline (customer side).
+- [ ] 2.6b Finish and merge the second AMI profile `frontend-browser-linux-x64` (parent `base-linux-x64`): extension `ami/extensions/frontend-browser.sh` (pinned Chrome by URL and SHA-256, libraries Cypress needs, Docker, optional pinned Terraform), profile file, derived-profile checks in `tools/ami-validation/validate.sh`, and bootstrap adding the runner user to the `docker` group only when the image already has that group. In progress on a branch, not merged.
+- [ ] 2.6c Build the front-end AMI (customer side), with Chrome pinned by a checksum-verified RPM kept in the customer's own storage.
+- [ ] 2.6d Run the sample repository on the front-end image on real x64 EC2 and keep `tools/launch-check` output as evidence. This is the same test as 2.5i.
+- [ ] 2.6e Label-to-image routing: design and build. The controller supports one launch template per deployment, so routing several labels to several images is not built.
+- [ ] 2.6f Decision, not code: after about three more front-end repositories pass on the front-end image, retire the base image unless some repository still needs it.
+- [ ] 2.6g A durable webhook queue. The queue is in memory today (see 2.2f), so an accepted event can be lost if the process dies.
+
+Notes on other open items: the published controller image with a digest per release is 2.2d; multi-replica coordination is 2.2e; releasing idle runners sooner is 2.5j.
 
 ### 3. Validate and correct
 
