@@ -79,6 +79,34 @@ variable "ssh_username" {
   default     = "ec2-user"
 }
 
+variable "extra_tags" {
+  type        = map(string)
+  default     = {}
+  description = "Extra tags (for example a request ID and a cleanup deadline) applied to the temporary build instance, its volumes, the AMI and its snapshots, so everything this build creates can be found and removed by the same tag intersection. Keys under the leo-runners: prefix are reserved."
+
+  validation {
+    condition     = alltrue([for k, v in var.extra_tags : !startswith(lower(k), "leo-runners:") && !startswith(lower(k), "aws:") && length(k) >= 1 && length(k) <= 128 && length(v) <= 256])
+    error_message = "The extra_tags keys must not use the reserved leo-runners: or aws: prefixes."
+  }
+}
+
+variable "extension_script" {
+  type        = string
+  default     = ""
+  description = "Optional path to a script that adds workload tools (a browser, Docker, system libraries) to the image. It runs as root after the base tools and before validation, so it cannot leave a runner, credentials or SSH keys behind. Empty runs nothing."
+}
+
+variable "extension_environment" {
+  type        = map(string)
+  default     = {}
+  description = "Environment variables passed to the extension script, for example pinned tool versions. Names must be upper case letters, digits and underscores."
+
+  validation {
+    condition     = alltrue([for k, v in var.extension_environment : can(regex("^[A-Z_][A-Z0-9_]*$", k)) && !strcontains(v, "\n")])
+    error_message = "The extension_environment names must match ^[A-Z_][A-Z0-9_]*$ and every value must be a single line."
+  }
+}
+
 variable "ami_name_prefix" {
   type        = string
   description = "Prefix for the immutable AMI name."
@@ -88,6 +116,11 @@ variable "ami_name_prefix" {
     condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$", var.ami_name_prefix))
     error_message = "The AMI name prefix must be 3-100 characters using letters, numbers, dot, underscore, or hyphen."
   }
+}
+
+locals {
+  extension_script = var.extension_script != "" ? var.extension_script : "${path.root}/scripts/extension-none.sh"
+  build_tags       = merge(var.extra_tags, { "leo-runners:managed-by" = "packer" })
 }
 
 source "amazon-ebs" "amazon_linux_x86_64" {
@@ -122,18 +155,23 @@ source "amazon-ebs" "amazon_linux_x86_64" {
     encrypted             = true
   }
 
-  tags = {
+  tags = merge(var.extra_tags, {
     "leo-runners:managed-by" = "packer"
     "leo-runners:image"      = "ephemeral-ci-runner"
     "leo-runners:os"         = "amazon-linux-2023"
     "leo-runners:arch"       = "x86_64"
     "leo-runners:phase"      = "5"
-  }
+  })
 
-  snapshot_tags = {
+  snapshot_tags = merge(var.extra_tags, {
     "leo-runners:managed-by" = "packer"
     "leo-runners:image"      = "ephemeral-ci-runner"
-  }
+  })
+
+  # The temporary build instance and its volume carry the same request tags, so
+  # a failed or interrupted build can be cleaned up by tag, not by guessing.
+  run_tags        = merge(var.extra_tags, { "leo-runners:managed-by" = "packer", "leo-runners:role" = "image-builder" })
+  run_volume_tags = merge(var.extra_tags, { "leo-runners:managed-by" = "packer", "leo-runners:role" = "image-builder" })
 }
 
 build {
@@ -143,6 +181,13 @@ build {
   provisioner "shell" {
     script            = "${path.root}/scripts/install-base-tools.sh"
     execute_command   = "sudo bash '{{ .Path }}'"
+    expect_disconnect = false
+  }
+
+  provisioner "shell" {
+    script            = local.extension_script
+    environment_vars  = [for k, v in var.extension_environment : "${k}=${v}"]
+    execute_command   = "sudo -E bash '{{ .Path }}'"
     expect_disconnect = false
   }
 
