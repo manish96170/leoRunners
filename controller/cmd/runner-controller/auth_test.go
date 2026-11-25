@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewGitHubTokenSourceStaticTokenMode(t *testing.T) {
-	source, err := newGitHubTokenSource(runtimeconfig.GitHubJITConfig{Enabled: true, InstallationToken: "static-token"})
+	source, err := newGitHubTokenSource(runtimeconfig.GitHubJITConfig{Enabled: true, InstallationToken: "static-token"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestNewGitHubTokenSourceAppMode(t *testing.T) {
 		Enabled: true, AppID: "12345", AppInstallationID: 678, AppPrivateKey: string(keyPEM),
 		APIBaseURL: "https://api.github.com", AppTokenPermissions: map[string]string{"administration": "write"},
 	}
-	source, err := newGitHubTokenSource(jit)
+	source, err := newGitHubTokenSource(jit, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestNewGitHubTokenSourceRejectsBadKeyWithoutLeakingIt(t *testing.T) {
 	secret := "-----BEGIN RSA " + "PRIVATE KEY-----\nsuper-secret-body\n-----END RSA " + "PRIVATE KEY-----"
 	_, err := newGitHubTokenSource(runtimeconfig.GitHubJITConfig{
 		Enabled: true, AppID: "12345", AppInstallationID: 678, AppPrivateKey: secret, APIBaseURL: "https://api.github.com",
-	})
+	}, nil)
 	if err == nil {
 		t.Fatal("an unusable private key must fail startup")
 	}

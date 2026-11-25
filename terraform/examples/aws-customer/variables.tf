@@ -98,9 +98,10 @@ variable "github" {
     api_base_url          = optional(string)
     runner_scope          = optional(string, "repository")
     app = optional(object({
-      app_id            = string
-      installation_id   = number
-      token_permissions = optional(map(string), {})
+      app_id             = string
+      installation_id    = number
+      token_permissions  = optional(map(string), {})
+      token_repositories = optional(list(string), [])
     }))
   })
   default = {}

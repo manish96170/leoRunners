@@ -191,6 +191,10 @@ type GitHubJITConfig struct {
 	AppInstallationID   int64
 	AppPrivateKey       string
 	AppTokenPermissions map[string]string
+	// AppTokenRepositories restricts every minted token to these repositories
+	// (names of the installation owner's repositories). Empty means unset; the
+	// executable then derives it from the repository allowlist when it can.
+	AppTokenRepositories []string
 	// RunnerScope is where JIT runners are registered: "repository" (the
 	// default, also when empty; needs repository Administration: write) or "organization"
 	// (needs only the organization Self-hosted runners permission, and the
@@ -400,6 +404,11 @@ func LoadFrom(env map[string]string) (Config, error) {
 		}
 	}
 	c.GitHubJIT.RunnerScope = strings.ToLower(getOr(env, "GITHUB_RUNNER_SCOPE", RunnerScopeRepository))
+	if raw := get("GITHUB_APP_TOKEN_REPOSITORIES"); raw != "" {
+		if c.GitHubJIT.AppTokenRepositories, err = ParseTokenRepositories(raw); err != nil {
+			return c, fmt.Errorf("%w: GITHUB_APP_TOKEN_REPOSITORIES: %v", ErrInvalid, err)
+		}
+	}
 	if !present && (c.GitHubJIT.InstallationToken != "" || c.GitHubJIT.AppConfigured()) {
 		c.GitHubJIT.Enabled = true
 	}
@@ -541,6 +550,9 @@ func (c Config) Validate() error {
 	}
 	if len(c.GitHubJIT.AppTokenPermissions) > 0 && !app {
 		problems = append(problems, "GITHUB_APP_TOKEN_PERMISSIONS requires the GitHub App settings")
+	}
+	if len(c.GitHubJIT.AppTokenRepositories) > 0 && !app {
+		problems = append(problems, "GITHUB_APP_TOKEN_REPOSITORIES requires the GitHub App settings")
 	}
 	if scope := c.GitHubJIT.RunnerScope; scope != "" && scope != RunnerScopeRepository && scope != RunnerScopeOrganization {
 		problems = append(problems, "GITHUB_RUNNER_SCOPE must be repository or organization")
@@ -698,7 +710,45 @@ func optionalBool(env map[string]string, key string) (bool, bool, error) {
 var (
 	tokenPermissionNameRE = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 	tokenPermissionLevels = map[string]struct{}{"read": {}, "write": {}, "admin": {}}
+	tokenRepositoryNameRE = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
 )
+
+// ParseTokenRepositories parses a comma separated list of repositories, each
+// "owner/name" or just "name", into the bare names an installation token
+// request takes. An installation belongs to one account, so owners must agree.
+func ParseTokenRepositories(value string) ([]string, error) {
+	var names []string
+	owner := ""
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		name := item
+		if o, n, ok := strings.Cut(item, "/"); ok {
+			if o == "" || n == "" || strings.Contains(n, "/") {
+				return nil, fmt.Errorf("%q must be owner/name or name", item)
+			}
+			if owner != "" && !strings.EqualFold(owner, o) {
+				return nil, fmt.Errorf("repositories from several owners (%q and %q): an installation belongs to one account", owner, o)
+			}
+			owner, name = o, n
+		}
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return nil, nil
+	}
+	if len(names) > 500 {
+		return nil, fmt.Errorf("too many repositories (max 500)")
+	}
+	for _, name := range names {
+		if !tokenRepositoryNameRE.MatchString(name) || name == "." || name == ".." {
+			return nil, fmt.Errorf("invalid repository name %q", name)
+		}
+	}
+	return names, nil
+}
 
 // parseTokenPermissions parses "name=level,name=level". An invalid name or
 // level is rejected so a typo cannot silently widen or drop a permission.

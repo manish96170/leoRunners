@@ -464,3 +464,43 @@ func TestRunnerTagsParseAndRejectReservedOrMalformed(t *testing.T) {
 		t.Fatalf("no tags configured: tags = %v, error = %v", c.Provider.AWS.Tags, err)
 	}
 }
+
+func TestParseTokenRepositories(t *testing.T) {
+	names, err := ParseTokenRepositories("acme/widgets, acme/api ,gadgets")
+	if err != nil || len(names) != 3 || names[0] != "widgets" || names[1] != "api" || names[2] != "gadgets" {
+		t.Fatalf("names = %v, error = %v", names, err)
+	}
+	if names, err := ParseTokenRepositories(" , "); err != nil || names != nil {
+		t.Fatalf("blank list = %v, %v", names, err)
+	}
+	for _, bad := range []string{"acme/widgets,other/api", "acme/", "/widgets", "acme/a/b", "a b", "acme/.."} {
+		if _, err := ParseTokenRepositories(bad); err == nil {
+			t.Errorf("%q must be rejected", bad)
+		}
+	}
+	if _, err := ParseTokenRepositories("ACME/widgets,acme/api"); err != nil {
+		t.Errorf("owners differing only by case must be accepted: %v", err)
+	}
+}
+
+func TestTokenRepositoriesNeedTheAppSettings(t *testing.T) {
+	env := appEnv()
+	env["GITHUB_APP_TOKEN_REPOSITORIES"] = "acme/widgets"
+	c, err := LoadFrom(env)
+	if err != nil || len(c.GitHubJIT.AppTokenRepositories) != 1 || c.GitHubJIT.AppTokenRepositories[0] != "widgets" {
+		t.Fatalf("repositories = %v, error = %v", c.GitHubJIT.AppTokenRepositories, err)
+	}
+	static := validEnv()
+	static["GITHUB_JIT_ENABLED"] = "true"
+	static["GITHUB_APP_INSTALLATION_TOKEN"] = "token"
+	static["GITHUB_RUNNER_GROUP_ID"] = "1"
+	static["GITHUB_APP_TOKEN_REPOSITORIES"] = "acme/widgets"
+	if _, err := LoadFrom(static); err == nil {
+		t.Fatal("GITHUB_APP_TOKEN_REPOSITORIES without the App settings must be rejected, like the permissions")
+	}
+	bad := appEnv()
+	bad["GITHUB_APP_TOKEN_REPOSITORIES"] = "acme/widgets,other/api"
+	if _, err := LoadFrom(bad); err == nil {
+		t.Fatal("repositories from two owners must be rejected")
+	}
+}

@@ -9,6 +9,7 @@
 | `GITHUB_APP_INSTALLATION_ID` | GitHub App mode | `github.app.installation_id` (plain config) |
 | `GITHUB_APP_PRIVATE_KEY` | GitHub App mode | Secrets Manager reference holding the PEM key |
 | `GITHUB_APP_TOKEN_PERMISSIONS` | optional, App mode | `github.app.token_permissions`, for example `administration=write` |
+| `GITHUB_APP_TOKEN_REPOSITORIES` | optional, App mode | `github.app.token_repositories`: limits every minted token to these repositories (see below) |
 | `GITHUB_APP_INSTALLATION_TOKEN` | static-token mode | Secrets Manager reference |
 | `GITHUB_RUNNER_GROUP_ID` | with JIT | `github.runner_group_id` |
 | `GITHUB_RUNNER_SCOPE` | optional, `repository` (default) or `organization` | `github.runner_scope` |
@@ -49,6 +50,17 @@ included in an error message. A key that is missing, malformed, passphrase
 protected, not RSA, or smaller than 2048 bits stops the controller at startup.
 A wrong App ID or installation ID is reported in the startup log by a background
 check without blocking startup, and is retried for each job.
+
+`GITHUB_APP_TOKEN_REPOSITORIES` (`owner/name` or `name`, comma separated; one
+owner, because an installation belongs to one account) limits every minted token
+to those repositories. An App's permission applies to every repository it is
+installed on, but the controller only acts on the repositories it allows, so
+this makes the rest unreachable through the controller's tokens: a defect or a
+stolen token cannot act on them. When unset, the limit is taken from
+`GITHUB_ALLOWED_REPOSITORIES`, unless an organization is allowed too (its
+repositories are not known up front) or the repositories belong to different
+owners; the startup log says which applied. The repositories must be ones the
+installation can reach, or GitHub refuses the token and the startup check says so.
 
 `GITHUB_APP_TOKEN_PERMISSIONS` (`name=level`, comma separated) optionally asks
 GitHub for tokens narrower than the App's full grant. The token can never exceed

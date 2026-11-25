@@ -304,7 +304,16 @@ func configureGitHubAssignment(service *controller.Service, repository state.Rep
 	}
 	groupID := jit.RunnerGroupID
 	orgScope := jit.RunnerScope == runtimeconfig.RunnerScopeOrganization
-	tokenSource, err := newGitHubTokenSource(jit)
+	allowedOrgs, allowedRepos := splitCSV(os.Getenv("GITHUB_ALLOWED_ORGANIZATIONS")), splitCSV(os.Getenv("GITHUB_ALLOWED_REPOSITORIES"))
+	tokenRepos, tokenRepoSource := tokenRepositories(jit.AppTokenRepositories, allowedOrgs, allowedRepos)
+	if jit.AppConfigured() {
+		if len(tokenRepos) > 0 {
+			log.Printf("GitHub App tokens are limited to repositories %v (%s)", tokenRepos, tokenRepoSource)
+		} else {
+			log.Printf("GitHub App tokens can reach every repository of the installation (%s)", tokenRepoSource)
+		}
+	}
+	tokenSource, err := newGitHubTokenSource(jit, tokenRepos)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -317,7 +326,7 @@ func configureGitHubAssignment(service *controller.Service, repository state.Rep
 	if err != nil {
 		log.Fatal(err)
 	}
-	scope := github.ScopePolicy{Organizations: splitCSV(os.Getenv("GITHUB_ALLOWED_ORGANIZATIONS")), Repositories: splitCSV(os.Getenv("GITHUB_ALLOWED_REPOSITORIES")), AllowedLabels: splitCSV(os.Getenv("GITHUB_ALLOWED_LABELS")), AllowForks: strings.EqualFold(os.Getenv("GITHUB_ALLOW_FORKS"), "true")}
+	scope := github.ScopePolicy{Organizations: allowedOrgs, Repositories: allowedRepos, AllowedLabels: splitCSV(os.Getenv("GITHUB_ALLOWED_LABELS")), AllowForks: strings.EqualFold(os.Getenv("GITHUB_ALLOW_FORKS"), "true")}
 	if err := scope.Validate(); err != nil {
 		log.Fatalf("GitHub scope policy is required when JIT is enabled: %v", err)
 	}

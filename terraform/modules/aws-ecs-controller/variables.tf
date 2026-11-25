@@ -506,7 +506,11 @@ variable "github" {
     Authentication is either a GitHub App (set `app`; the controller mints its
     own short-lived installation tokens from a private key held in Secrets
     Manager) or an externally rotated installation token (leave `app` null).
-    The two are mutually exclusive. `app.token_permissions` optionally narrows
+    The two are mutually exclusive. `app.token_repositories` limits every minted
+    token to those repositories (names, or owner/name; one owner). Left empty,
+    the controller derives the limit from `allowed_repositories` when no
+    organization is allowed, so a token cannot reach the App's other
+    repositories. `app.token_permissions` optionally narrows
     each minted token below what the App was granted, for example
     { administration = "write" }.
   EOT
@@ -520,9 +524,10 @@ variable "github" {
     api_base_url          = optional(string)
     runner_scope          = optional(string, "repository")
     app = optional(object({
-      app_id            = string
-      installation_id   = number
-      token_permissions = optional(map(string), {})
+      app_id             = string
+      installation_id    = number
+      token_permissions  = optional(map(string), {})
+      token_repositories = optional(list(string), [])
     }))
   })
   default = {}
@@ -543,6 +548,14 @@ variable "github" {
       can(regex("^[a-z][a-z0-9_]{0,63}$", name)) && contains(["read", "write", "admin"], level)
     ])
     error_message = "github.app.token_permissions must map lowercase permission names to read, write, or admin."
+  }
+
+  validation {
+    condition = var.github.app == null || alltrue([
+      for r in var.github.app.token_repositories :
+      can(regex("^([A-Za-z0-9._-]{1,100}/)?[A-Za-z0-9._-]{1,100}$", r))
+    ])
+    error_message = "github.app.token_repositories entries must be repository names or owner/name."
   }
 
   validation {

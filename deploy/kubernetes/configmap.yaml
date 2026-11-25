@@ -42,6 +42,9 @@ data:
   GITHUB_APP_ID: ""
   GITHUB_APP_INSTALLATION_ID: ""
   GITHUB_APP_TOKEN_PERMISSIONS: ""
+  # Limit minted tokens to these repositories (owner/name or name). Empty derives
+  # the limit from GITHUB_ALLOWED_REPOSITORIES when no organization is allowed.
+  GITHUB_APP_TOKEN_REPOSITORIES: ""
   GITHUB_API_BASE_URL: https://api.github.com
   GITHUB_JIT_REQUEST_TIMEOUT: 30s
   GITHUB_REGISTRATION_TIMEOUT: 10m
