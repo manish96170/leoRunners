@@ -67,12 +67,49 @@ The manifest is generated only by a successful build and is ignored by source
 control. Promote an AMI by its immutable ID and record that ID in the Launch
 Template; do not resolve a moving AMI alias during runner provisioning.
 
+## Tagging a build
+
+`extra_tags` is applied to the temporary build instance, its volume, the AMI and
+its snapshots. Put a request ID and a cleanup deadline there, and a build (even a
+failed or interrupted one) can be found and removed by the same tag intersection
+as everything else for that request. Packer removes its own temporary instance,
+key pair and security group when it finishes; after a build, check that nothing
+tagged with the request ID except the AMI and its snapshots remains.
+
+## Adding workload tools
+
+The base image carries only what a runner needs to start and run a job. A
+workload's own tools (a browser, Docker, a language runtime, system libraries)
+belong in an **extension** kept outside this repository, with the versions it
+pins, so that customer choices never enter the generic code:
+
+```hcl
+extension_script      = "/path/to/your/extension.sh"
+extension_environment = { SOME_TOOL_VERSION = "1.2.3" }
+```
+
+The script runs as root after the base tools and before validation. Because
+validation runs afterwards, an extension cannot leave behind a runner
+installation, credentials or SSH keys: the build fails if it does. Pin every
+version and verify every download by checksum inside the script. Record the
+extension's name and version next to the AMI ID, so an image can be traced to
+what is in it.
+
+Tools that `actions/setup-node` or a workflow installs itself at job time (Node,
+Terraform) do not need baking; baking them saves job time and makes the job
+independent of the download, which is the usual reason to.
+
 ## Image contents
 
 The installer uses Amazon Linux 2023's `dnf` package manager and installs:
 
-`ca-certificates`, `curl-minimal`, `git`, `gzip`, `jq`, `make`, `openssl`,
-`tar`, `unzip`, and `which`.
+`ca-certificates`, `curl-minimal`, `git`, `gzip`, `jq`, `libatomic` (Node.js
+builds need it), `make`, `openssl`, `tar`, `unzip`, and `which`.
+
+The GitHub Actions runner is deliberately not baked: `bootstrap/runner/user-data.sh`
+downloads a pinned, checksum-verified runner at launch. That costs launch time and
+needs egress to GitHub's download hosts; baking it would need a change to
+`validate-image.sh`, which currently refuses an image that contains one.
 
 `validate-image.sh` runs inside the temporary build host and fails if the
 runner installation or common credential paths are present. It does not call

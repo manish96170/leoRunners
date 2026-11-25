@@ -14,6 +14,13 @@ for command_name in "${required_commands[@]}"; do
   }
 done
 
+# Node.js builds that actions/setup-node downloads need libatomic on this
+# architecture; without it a job fails with exit code 127.
+ldconfig -p | grep -q 'libatomic\.so\.1' || {
+  printf '%s\n' 'libatomic is missing; Node.js would not start' >&2
+  exit 1
+}
+
 [[ -f /etc/leo-runners/image-profile ]] || {
   printf '%s\n' 'image profile marker is missing' >&2
   exit 1

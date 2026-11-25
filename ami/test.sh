@@ -20,6 +20,10 @@ grep -Fq 'http_put_response_hop_limit = 1' runner.pkr.hcl
 grep -Fq 'encrypted             = true' runner.pkr.hcl
 grep -Fq 'leo-runners:arch' runner.pkr.hcl
 grep -Fq 'profile_version' manifest.example.v1.json
+grep -Fq 'variable "extension_script"' runner.pkr.hcl
+grep -Fq 'variable "extra_tags"' runner.pkr.hcl
+grep -Fq 'run_tags' runner.pkr.hcl
+grep -Fq 'libatomic' scripts/install-base-tools.sh scripts/validate-image.sh
 
 if rg -n -i 'aws_access_key|aws_secret|github_pat|github_token|encoded_jit_config|BEGIN (RSA|OPENSSH|EC)' \
   --glob '!test.sh' --glob '!validate.sh' --glob '!README.md' .; then
