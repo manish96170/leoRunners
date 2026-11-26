@@ -36,4 +36,6 @@ if rg -n 'curl[^\n]*actions-runner|config\.sh|run\.sh' scripts runner.pkr.hcl; t
   exit 1
 fi
 
+bash extensions/test.sh
+
 printf '%s\n' 'offline AMI asset validation passed'

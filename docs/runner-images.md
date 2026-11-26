@@ -42,8 +42,11 @@ to start the ephemeral runner safely:
 - `curl`, CA certificates, and DNS/network utilities for bootstrap;
 - `jq`, for inspecting structured bootstrap and diagnostic data;
 - Bash, core POSIX utilities, archive tools, and a non-root runner account;
-- the pinned GitHub Actions runner distribution and its checksum;
 - the bootstrap entrypoint and its supported shell contract.
+
+The GitHub Actions runner is not part of the image. The bootstrap downloads a
+pinned, checksum-verified runner at launch, and image validation fails if a
+runner installation is present.
 
 The image does not include repository dependencies, customer secrets, GitHub
 PATs, JIT configurations, cloud access keys, SSH keys, or a mutable cache.
@@ -73,6 +76,24 @@ Rules:
    for rarely used tools.
 6. Docker or privileged tooling requires an explicit security profile,
    runner IAM review, and workload isolation decision.
+
+## Derived profiles and the extension hook
+
+The image build has an optional extension hook. An extension is a script that
+runs as root after the base tools are installed and before image validation.
+Tool versions are passed to it as environment values. Because validation runs
+afterwards, an extension cannot leave behind a runner installation, credentials
+or SSH keys: the build fails if it does.
+
+The generic parts belong in this repository: the hook, the profile format, and
+the derived profiles that document a kind of workload (for example a front-end
+profile with a browser and Docker). Tool versions, download URLs, checksums,
+built AMI IDs, retention and approvals belong to the infrastructure repository
+of whoever builds the image, not here.
+
+Group repositories by kind of workload and keep few images, rather than one
+image per repository. For the build inputs and the hook, see `ami/README.md`.
+For the profile files and their rules, see `ami/profiles/README.md`.
 
 ## Versioning, rollout, and rollback
 
@@ -122,7 +143,8 @@ An image cannot become `approved` unless every gate passes:
    permissions, runner user, IMDSv2 assumptions, encryption, and bootstrap
    contract are verified.
 4. **Tool smoke test:** every declared tool reports the declared version and
-   the runner distribution passes its checksum and startup check.
+   the image contains no runner installation (the runner is downloaded and
+   checksum-verified by the bootstrap at launch).
 5. **Ephemeral launch:** a disposable EC2 instance launches from the candidate
    AMI with the required launch-template settings and reaches healthy state.
 6. **Registration:** a test JIT configuration is delivered through the private

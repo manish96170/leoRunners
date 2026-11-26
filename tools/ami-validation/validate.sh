@@ -96,6 +96,34 @@ install_script = File.join(File.dirname(hcl_path), "scripts/install-base-tools.s
 fail_contract.call("runner installation in base image") if hcl.match?(/actions-runner|config\.sh|run\.sh/i) || File.read(install_script).match?(/actions-runner|config\.sh|run\.sh/i)
 fail_contract.call("root execution policy") unless hcl.include?("execute_command   = \"sudo bash")
 
+# Derived profiles: one parent, never weaken the parent's security, and never
+# bake a runner, credentials or JIT configuration. A new profile is checked here
+# the day it is added.
+profiles_dir = File.dirname(profile_path)
+parent_security = profile.dig("spec", "security")
+Dir.glob(File.join(profiles_dir, "*.yaml")).sort.each do |path|
+  derived = YAML.safe_load(File.read(path), permitted_classes: [], aliases: false)
+  name = derived.dig("metadata", "name")
+  next if path == profile_path
+  fail_contract.call("#{name}: apiVersion/kind") unless derived["apiVersion"] == "runner-images.leorunners.io/v1" && derived["kind"] == "RunnerImageProfile"
+  fail_contract.call("#{name}: metadata.name must match the file name") unless File.basename(path, ".yaml") == name
+  fail_contract.call("#{name}: version") unless derived.dig("metadata", "version").to_s.match?(/\A\d+\.\d+\.\d+\z/)
+  fail_contract.call("#{name}: must declare base-linux-x64 as its parent") unless derived.dig("spec", "parent", "name") == "base-linux-x64" && derived.dig("spec", "parent", "version") == profile.dig("metadata", "version")
+  fail_contract.call("#{name}: architecture must match its parent") unless derived.dig("spec", "architecture") == profile.dig("spec", "architecture")
+  security = derived.dig("spec", "security") || {}
+  parent_security.each do |key, value|
+    fail_contract.call("#{name}: security.#{key} must equal the parent's (#{value})") unless security[key] == value
+  end
+  fail_contract.call("#{name}: user data must not install packages") unless derived.dig("spec", "bootstrap", "userDataMayInstallPackages") == false
+  (derived.dig("spec", "tools") || []).each do |tool|
+    fail_contract.call("#{name}: tool #{tool["name"]} must say how its version is pinned") unless tool["version"].to_s.start_with?("pinned-by-")
+    fail_contract.call("#{name}: tool #{tool["name"]} must not be the GitHub runner") if tool["name"].to_s.match?(/actions-runner|github-actions-runner/)
+  end
+  script = derived.dig("spec", "extension", "script")
+  fail_contract.call("#{name}: extension script #{script} does not exist") if script && !File.exist?(File.join(File.expand_path("../..", profiles_dir), script))
+  puts "profile ok: #{name}@#{derived.dig("metadata", "version")} (parent #{profile.dig("metadata", "name")})"
+end
+
 puts "AMI contract validation passed: #{metadata.fetch("name")}@#{version}"
 RUBY
 
