@@ -200,8 +200,11 @@ there by design (no arm64 build), which is the point of the real x64 step.
 
 ### Next steps, in order
 
-1. Merge the front-end profile work (extension, profile, derived-profile checks,
-   bootstrap docker group) once its container test is recorded.
+1. Done: the front-end profile work (extension, profile, derived-profile checks,
+   bootstrap docker group) is merged; only its Chrome launch check is unproven
+   (it needs a real builder). Prompt files for the infra session are kept outside
+   this repository: regenerate them from the current `main`, do not trust copies
+   left in a temp folder.
 2. Customer side builds the base and front-end AMIs (after their own approvals),
    from a pinned commit of this repo, with `extra_tags` and a checksum-verified
    Chrome kept in their own storage. Prompt files for that live outside the repo.
