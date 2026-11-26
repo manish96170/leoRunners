@@ -29,7 +29,10 @@ an assumed role).
 The build security group must permit SSH from the Packer builder and should
 not be reused as the runtime runner security group. The template uses the
 private IP of the build instance, encrypted gp3 root storage, and IMDSv2 with
-`HttpTokens=required`. It does not assign a public IP.
+`HttpTokens=required`. It never assigns a public IP
+(`associate_public_ip_address = false`, checked by `ami/test.sh`), whatever the
+subnet default says, so the machine running Packer needs a network path to the
+builder's private IP.
 
 ## Validate and build
 

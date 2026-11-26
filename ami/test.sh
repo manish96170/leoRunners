@@ -14,6 +14,8 @@ grep -Fq 'imds_support = "v2.0"' runner.pkr.hcl
 grep -Fq 'source_ami' runner.pkr.hcl
 grep -Fq 'vpc_id' runner.pkr.hcl
 grep -Fq 'subnet_id' runner.pkr.hcl
+grep -Eq '^\s*associate_public_ip_address\s*=\s*false$' runner.pkr.hcl
+grep -Eq '^\s*ssh_interface\s*=\s*"private_ip"$' runner.pkr.hcl
 grep -Fq 'iam_instance_profile' runner.pkr.hcl
 grep -Fq 'script            = "${path.root}/scripts/install-base-tools.sh"' runner.pkr.hcl
 grep -Fq 'http_put_response_hop_limit = 1' runner.pkr.hcl

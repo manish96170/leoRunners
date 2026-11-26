@@ -133,7 +133,10 @@ source "amazon-ebs" "amazon_linux_x86_64" {
   security_group_id    = var.security_group_id
   iam_instance_profile = var.iam_instance_profile
   ssh_interface        = "private_ip"
-  ssh_timeout          = "10m"
+
+  # The builder never gets a public IP, whatever the subnet default says.
+  associate_public_ip_address = false
+  ssh_timeout                 = "10m"
 
   # Enforce IMDSv2 on the temporary build host and on the resulting AMI.
   metadata_options {
